@@ -56,6 +56,7 @@ export default function RegistrationModal({ isOpen, onClose, onRegistered, servi
   const [classification, setClassification] = useState('Residential')
   const [baseMapType, setBaseMapType] = useState('roadmap')
   const [error, setError] = useState('')
+
   const mapContainerRef = useRef(null)
   const mapInstanceRef = useRef(null)
   const tileLayerRef = useRef(null)
@@ -229,8 +230,11 @@ export default function RegistrationModal({ isOpen, onClose, onRegistered, servi
     onClose()
   }
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault()
+
+    const cleanEmail = email.trim().toLowerCase()
+
     if (password.length < 8) {
       setError('Use at least 8 characters for your password.')
       return
@@ -248,21 +252,25 @@ export default function RegistrationModal({ isOpen, onClose, onRegistered, servi
       return
     }
 
-    onRegistered({
-      fullName: fullName.trim(),
-      email: email.trim(),
-      mobile: mobile.trim(),
-      username: username.trim().toLowerCase(),
-      password,
-      zone: selectedCluster,
-      cluster: selectedCluster,
-      address: address.trim(),
-      serviceCoordinates,
-      classification,
-      role: 'House Hold',
-      createdAt: new Date().toISOString(),
-    })
-    resetForm()
+    try {
+      await onRegistered({
+        fullName: fullName.trim(),
+        email: cleanEmail,
+        mobile: mobile.trim(),
+        username: username.trim().toLowerCase(),
+        password,
+        zone: selectedCluster,
+        cluster: selectedCluster,
+        address: address.trim(),
+        serviceCoordinates,
+        classification,
+        role: 'House Hold',
+        createdAt: new Date().toISOString(),
+      })
+      resetForm()
+    } catch (err) {
+      setError(err?.message || 'Registration could not be completed. Please try again.')
+    }
   }
 
   return (
@@ -353,7 +361,12 @@ export default function RegistrationModal({ isOpen, onClose, onRegistered, servi
             <span>I agree to receive Lambawasa billing and service updates.</span>
           </label>
 
-          <button type="submit" className="primary-button full btn-lg">Create household account <span>→</span></button>
+          <button
+            type="submit"
+            className="primary-button full btn-lg"
+          >
+            Create household account →
+          </button>
         </form>
 
         <p className="registration-footer">Already registered? Close this window and sign in with your account.</p>

@@ -14,6 +14,7 @@ export default function PaymentPOS({
   const [paymentMethod, setPaymentMethod] = useState('Cash')
   const [cashierName] = useState('Jamie Dizon (Terminal 01)')
   const [issuedReceipt, setIssuedReceipt] = useState(null)
+  const [isProcessingPayment, setIsProcessingPayment] = useState(false)
 
   // Unpaid bills eligible for payment
   const unpaidBills = bills.filter((b) => b.status !== 'Paid')
@@ -58,7 +59,14 @@ export default function PaymentPOS({
     setTenderedAmount('')
   }
 
-  const dueAmount = selectedBill ? selectedBill.totalAmount : 0
+  const paidForSelectedBill = selectedBill
+    ? payments
+      .filter((payment) => payment.billId === selectedBill.id)
+      .reduce((total, payment) => total + Number(payment.amountPaid || 0), 0)
+    : 0
+  const dueAmount = selectedBill
+    ? Math.max(0, Number((Number(selectedBill.totalAmount) - paidForSelectedBill).toFixed(2)))
+    : 0
   const tenderedNum = Number(tenderedAmount) || 0
   const changeNum = Math.max(0, tenderedNum - dueAmount)
   const isInsufficient = tenderedNum < dueAmount
@@ -78,9 +86,9 @@ export default function PaymentPOS({
     }
   }
 
-  const handleCompletePayment = (e) => {
+  const handleCompletePayment = async (e) => {
     e.preventDefault()
-    if (!selectedBill) return
+    if (!selectedBill || isProcessingPayment) return
     if (isInsufficient) {
       flash('Tendered amount is insufficient to cover total due!')
       return
@@ -104,13 +112,24 @@ export default function PaymentPOS({
       timestamp,
     }
 
-    onProcessPayment(selectedBill.id, paymentRecord)
-    setIssuedReceipt(paymentRecord)
-    setSelectedBill(null)
-    setSearchTerm('')
-    setTenderedAmount('')
-    setCashToAdd('')
-    flash(`Official Receipt ${orNumber} issued! Bill marked as PAID.`)
+    setIsProcessingPayment(true)
+    try {
+      const paymentSaved = await onProcessPayment(selectedBill.id, paymentRecord)
+      if (!paymentSaved) {
+        throw new Error('Payment could not be saved. The bill remains unpaid.')
+      }
+      setIssuedReceipt(paymentRecord)
+      setSelectedBill(null)
+      setSearchTerm('')
+      setTenderedAmount('')
+      setCashToAdd('')
+      flash(`Official Receipt ${orNumber} issued! Bill marked as PAID.`)
+    } catch (error) {
+      console.error('Could not complete counter payment:', error)
+      flash(error.message || 'Payment could not be saved. The bill remains unpaid.')
+    } finally {
+      setIsProcessingPayment(false)
+    }
   }
 
   return (
@@ -278,10 +297,10 @@ export default function PaymentPOS({
 
                 <button
                   type="submit"
-                  disabled={isInsufficient}
+                  disabled={isInsufficient || isProcessingPayment}
                   className="primary-button full btn-lg"
                 >
-                  ✓ Confirm Payment & Issue Official Receipt
+                  {isProcessingPayment ? 'Saving Payment...' : '✓ Confirm Payment & Issue Official Receipt'}
                 </button>
               </div>
             </form>

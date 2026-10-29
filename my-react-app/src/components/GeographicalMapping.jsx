@@ -1,6 +1,28 @@
 import { useState, useEffect, useRef } from 'react'
 import L from '../services/leaflet'
 import 'leaflet/dist/leaflet.css'
+import {
+  Navigation,
+  Compass,
+  ExternalLink,
+  MapPin,
+  Route,
+  Layers,
+  Search,
+  Crosshair,
+  Radio,
+  CheckCircle2,
+  X,
+  Send,
+  Volume2,
+  CornerUpRight,
+  ArrowUp,
+  Flag,
+  Maximize2,
+  Mountain,
+  Car,
+  Clock,
+} from 'lucide-react'
 
 // Google Maps Base Tile Layer URLs
 const GOOGLE_MAP_LAYERS = {
@@ -27,11 +49,17 @@ const GOOGLE_MAP_LAYERS = {
   },
 }
 
-// Custom HTML DivIcon generator for Leaflet
+// Custom HTML DivIcon generator for Leaflet aligning with Lambawasa design system
 function createCustomMarkerIcon(pin, isSelected = false, isPinningTarget = false) {
   const statusClass = pin.status ? pin.status.toLowerCase() : 'normal'
   const selectedClass = isSelected ? 'marker-selected' : ''
   const pinningClass = isPinningTarget ? 'marker-pinning-target' : ''
+
+  // Clean vector icon aligned with app branding (No emojis)
+  const isAlert = statusClass === 'issue' || statusClass === 'disconnected' || statusClass === 'overdue'
+  const iconSvg = isAlert
+    ? `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>`
+    : `<svg width="14" height="14" viewBox="0 0 24 24" fill="#ffffff" stroke="none"><path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/></svg>`
 
   return L.divIcon({
     className: 'custom-leaflet-marker-wrapper',
@@ -39,7 +67,7 @@ function createCustomMarkerIcon(pin, isSelected = false, isPinningTarget = false
       <div class="google-pin-marker ${statusClass} ${selectedClass} ${pinningClass}">
         <div class="google-pin-pulse"></div>
         <div class="google-pin-head">
-          <span class="google-pin-icon">💧</span>
+          <span class="google-pin-icon" style="display:flex;align-items:center;justify-content:center;">${iconSvg}</span>
         </div>
         <div class="google-pin-tip"></div>
         <div class="google-pin-label">${pin.name || 'Consumer'}</div>
@@ -51,14 +79,15 @@ function createCustomMarkerIcon(pin, isSelected = false, isPinningTarget = false
   })
 }
 
-// Custom DivIcon for Searched Address Waypoint
+// Custom DivIcon for Searched Address Waypoint (Vector Pin)
 function createSearchWaypointIcon(label) {
+  const waypointSvg = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0"/><circle cx="12" cy="10" r="3"/></svg>`
   return L.divIcon({
     className: 'custom-search-waypoint-wrapper',
     html: `
       <div class="search-waypoint-pin">
         <div class="search-pin-radar"></div>
-        <div class="search-pin-head">📍</div>
+        <div class="search-pin-head" style="display:flex;align-items:center;justify-content:center;">${waypointSvg}</div>
         <div class="search-pin-tip"></div>
         <div class="search-pin-banner">${label}</div>
       </div>
@@ -184,6 +213,37 @@ export default function GeographicalMapping({
   // GPS Live Tracking State
   const [isTrackingLiveGPS, setIsTrackingLiveGPS] = useState(false)
   const [gpsStatusText, setGpsStatusText] = useState('')
+  const [activeRouteNav, setActiveRouteNav] = useState(null) // { distanceKm, durationMin, origin, destination, destinationName }
+  const [isInAppNavOpen, setIsInAppNavOpen] = useState(false)
+  const [navStepIndex, setNavStepIndex] = useState(0)
+  const [navMapMode, setNavMapMode] = useState('k') // 'k' = Satellite (hybrid), 'm' = Roadmap
+
+  // Direct In-App Google Maps Tools & Controls State
+  const [isDirectGoogleMapActive, setIsDirectGoogleMapActive] = useState(false)
+  const [googleMapsToolSearch, setGoogleMapsToolSearch] = useState('')
+  const [travelMode, setTravelMode] = useState('driving')
+  const [showStepDetails, setShowStepDetails] = useState(false)
+  const [isBannerCollapsed, setIsBannerCollapsed] = useState(false)
+  const [directGoogleMapEmbedUrl, setDirectGoogleMapEmbedUrl] = useState('')
+
+  const handleReturnToLeaflet = () => {
+    setIsDirectGoogleMapActive(false)
+    setTimeout(() => {
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.invalidateSize()
+      }
+    }, 150)
+  }
+
+  // Fallback: Launch External Google Maps app if desired
+  const openInGoogleMaps = (destLat, destLng, originLat, originLng) => {
+    let url = `https://www.google.com/maps/dir/?api=1&destination=${destLat},${destLng}`
+    if (originLat && originLng) {
+      url += `&origin=${originLat},${originLng}`
+    }
+    url += '&travelmode=driving'
+    window.open(url, '_blank', 'noopener,noreferrer')
+  }
 
   // 1. Initialize Leaflet Map with Google Maps base layer
   useEffect(() => {
@@ -447,30 +507,88 @@ export default function GeographicalMapping({
     const origin = trackingLocation || { lat: 6.429763, lng: 124.970325 }
     const originPoint = [origin.lat, origin.lng]
     const targetPoint = [targetLat, targetLng]
-    L.circleMarker(originPoint, {
-      radius: 8,
-      color: '#991b1b',
-      fillColor: '#ef4444',
-      fillOpacity: 1,
-      weight: 3,
-    }).bindTooltip(trackingLocation ? 'Field staff current location' : 'Field staff starting location', { direction: 'top' }).addTo(trackingLayer)
+
+    // Calculate approximate road distance (Haversine formula * winding road multiplier 1.25)
+    const toRad = (x) => (x * Math.PI) / 180
+    const dLat = toRad(targetLat - origin.lat)
+    const dLng = toRad(targetLng - origin.lng)
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(toRad(origin.lat)) * Math.cos(toRad(targetLat)) * Math.sin(dLng / 2) * Math.sin(dLng / 2)
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+    const straightDistKm = 6371 * c
+    const approxDrivingKm = (straightDistKm * 1.25).toFixed(1)
+    const approxDurationMins = Math.max(3, Math.round((approxDrivingKm / 35) * 60))
+
+    setActiveRouteNav({
+      originLat: origin.lat,
+      originLng: origin.lng,
+      destLat: targetLat,
+      destLng: targetLng,
+      targetName: trackedTicket.consumerName || targetPin.name || 'Reported Consumer',
+      distanceKm: approxDrivingKm,
+      durationMin: approxDurationMins,
+      issueType: trackedTicket.issueType || 'Service inspection',
+    })
+
+    // 1. Google Navigation Route Polyline (Casing shadow + Google Blue stroke)
     L.polyline([originPoint, targetPoint], {
-      color: '#dc2626',
-      weight: 5,
-      opacity: 0.95,
-      dashArray: '12 8',
-    }).bindTooltip('Route to reported consumer', { sticky: true }).addTo(trackingLayer)
+      color: '#0369a1',
+      weight: 8,
+      opacity: 0.5,
+      lineCap: 'round',
+      lineJoin: 'round',
+    }).addTo(trackingLayer)
+
+    L.polyline([originPoint, targetPoint], {
+      color: '#0284c7',
+      weight: 4.5,
+      opacity: 0.9,
+      dashArray: '8 6',
+      lineCap: 'round',
+      lineJoin: 'round',
+    }).bindTooltip(`Driving: ~${approxDrivingKm} km (${approxDurationMins} mins via Google GPS)`, { direction: 'center', permanent: false }).addTo(trackingLayer)
+
+    // 2. Origin GPS Location Icon (Clean live beacon SVG)
+    const originIcon = L.divIcon({
+      className: 'nav-origin-marker',
+      html: `
+        <div style="background:#0284c7; width:26px; height:26px; border-radius:50%; border:2.5px solid #ffffff; box-shadow:0 0 12px rgba(2,132,199,0.7); display:flex; align-items:center; justify-content:center; color:#fff;">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3" fill="#ffffff"/></svg>
+        </div>
+      `,
+      iconSize: [26, 26],
+      iconAnchor: [13, 13],
+    })
+    L.marker(originPoint, { icon: originIcon })
+      .bindTooltip(trackingLocation ? 'Your Live GPS Location' : 'Field Operations Starting Point', { direction: 'top' })
+      .addTo(trackingLayer)
+
+    // 3. Highlight destination premise with a clean pulsing boundary ring (prevents duplicate marker overlap)
     L.circleMarker(targetPoint, {
-      radius: 10,
-      color: '#7f1d1d',
-      fillColor: '#f87171',
-      fillOpacity: 1,
-      weight: 3,
-    }).bindPopup(`<strong>${trackedTicket.consumerName || targetPin.name || 'Consumer'}</strong><br />${trackedTicket.issueType || 'Service report'}`).addTo(trackingLayer)
+      radius: 18,
+      color: '#0284c7',
+      weight: 2.5,
+      opacity: 0.85,
+      fillColor: '#38bdf8',
+      fillOpacity: 0.2,
+      dashArray: '4 4',
+    }).bindPopup(`
+      <div style="padding:6px 2px; font-family:sans-serif;">
+        <strong style="color:#102033; font-size:13px;">${trackedTicket.consumerName || targetPin.name || 'Consumer'}</strong><br />
+        <span style="color:#617286; font-size:11px;">${trackedTicket.issueType || 'Service report'}</span><br />
+        <div style="margin-top:8px; display:flex; flex-direction:column; gap:6px;">
+          <button onclick="window.__openDirectGoogleMap && window.__openDirectGoogleMap(${targetLat}, ${targetLng}, ${origin.lat}, ${origin.lng})" 
+                  style="display:flex; align-items:center; justify-content:center; gap:5px; width:100%; padding:7px 10px; background:#0284c7; color:#fff; border:none; border-radius:6px; font-size:11px; font-weight:bold; cursor:pointer;">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg> Direct Google Map View
+          </button>
+        </div>
+      </div>
+    `).addTo(trackingLayer)
 
     const targetConsumerPin = pins.find((pin) => pin.id === targetPin.id)
     if (targetConsumerPin) setSelectedPin(targetConsumerPin)
-    map.fitBounds([originPoint, targetPoint], { padding: [48, 48], maxZoom: 16 })
+    map.fitBounds([originPoint, targetPoint], { padding: [60, 60], maxZoom: 16 })
   }, [trackedTicket, trackingLocation, pins])
 
   // 4. Handle Map Click when Admin "Pin Mode" is Active
@@ -1077,19 +1195,19 @@ export default function GeographicalMapping({
             className={`layer-btn ${baseMapType === 'roadmap' ? 'active' : ''}`}
             onClick={() => setBaseMapType('roadmap')}
           >
-            🗺️ Google Roadmap
+            <Layers size={13} style={{ marginRight: '5px' }} /> Roadmap
           </button>
           <button
             className={`layer-btn ${baseMapType === 'satellite' ? 'active' : ''}`}
             onClick={() => setBaseMapType('satellite')}
           >
-            🛰️ Satellite Hybrid
+            <Compass size={13} style={{ marginRight: '5px' }} /> Satellite Hybrid
           </button>
           <button
             className={`layer-btn ${baseMapType === 'terrain' ? 'active' : ''}`}
             onClick={() => setBaseMapType('terrain')}
           >
-            ⛰️ Terrain
+            <Mountain size={13} style={{ marginRight: '5px' }} /> Terrain
           </button>
         </div>
 
@@ -1135,6 +1253,128 @@ export default function GeographicalMapping({
         <div className={`google-map-wrapper ${isPinModeActive ? 'cursor-crosshair' : ''}`}>
           <div ref={mapContainerRef} className="leaflet-map-canvas" />
 
+          {/* Leaflet Mode: Collapsible, Non-Overlapping Google GPS HUD Banner */}
+          {activeRouteNav && (
+            <div
+              className="google-gps-nav-banner"
+              style={{
+                position: 'absolute',
+                top: '16px',
+                left: '16px',
+                zIndex: 1000,
+                background: '#ffffff',
+                borderRadius: '16px',
+                boxShadow: '0 10px 25px -5px rgba(16, 32, 51, 0.25)',
+                border: '1.5px solid #0284c7',
+                padding: isBannerCollapsed ? '8px 12px' : '14px 18px',
+                maxWidth: isBannerCollapsed ? '280px' : '360px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '8px',
+                animation: 'fadeIn 0.2s ease',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <span
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    fontSize: '11px',
+                    fontWeight: 800,
+                    letterSpacing: '0.5px',
+                    color: '#0284c7',
+                    textTransform: 'uppercase',
+                  }}
+                >
+                  <Navigation size={13} /> GPS Navigation Route
+                </span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <button
+                    type="button"
+                    onClick={() => setIsBannerCollapsed(!isBannerCollapsed)}
+                    style={{ background: '#f1f5f9', border: 'none', borderRadius: '4px', padding: '2px 6px', fontSize: '10px', fontWeight: 700, cursor: 'pointer', color: '#617286' }}
+                    title={isBannerCollapsed ? 'Expand Navigation HUD' : 'Minimize Navigation HUD'}
+                  >
+                    {isBannerCollapsed ? '+' : '−'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveRouteNav(null)}
+                    style={{ background: '#f1f5f9', border: 'none', borderRadius: '50%', width: '22px', height: '22px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#617286' }}
+                  >
+                    <X size={13} />
+                  </button>
+                </div>
+              </div>
+
+              {!isBannerCollapsed && (
+                <>
+                  <div>
+                    <strong style={{ fontSize: '14px', color: '#102033', display: 'block' }}>
+                      {activeRouteNav.targetName}
+                    </strong>
+                    <span style={{ fontSize: '11.5px', color: '#617286' }}>
+                      {activeRouteNav.issueType}
+                    </span>
+                  </div>
+
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '12px',
+                      background: '#f8fafc',
+                      padding: '8px 12px',
+                      borderRadius: '8px',
+                      border: '1px solid #e2e8f0',
+                    }}
+                  >
+                    <div>
+                      <span style={{ fontSize: '10px', color: '#617286', display: 'block', textTransform: 'uppercase' }}>Driving Distance</span>
+                      <strong style={{ fontSize: '14px', color: '#0284c7' }}>{activeRouteNav.distanceKm} km</strong>
+                    </div>
+                    <div style={{ width: '1px', height: '24px', background: '#cbd5e1' }} />
+                    <div>
+                      <span style={{ fontSize: '10px', color: '#617286', display: 'block', textTransform: 'uppercase' }}>Est. Travel Time</span>
+                      <strong style={{ fontSize: '14px', color: '#0d9488' }}>~{activeRouteNav.durationMin} mins</strong>
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        openInGoogleMaps(
+                          activeRouteNav.destLat,
+                          activeRouteNav.destLng,
+                          activeRouteNav.originLat,
+                          activeRouteNav.originLng
+                        )
+                      }
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '6px',
+                        background: '#0284c7',
+                        color: '#ffffff',
+                        border: 'none',
+                        borderRadius: '8px',
+                        padding: '9px 12px',
+                        fontSize: '11.5px',
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      <ExternalLink size={14} /> Open in Google Maps (External)
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+
           {/* Floating Map Overlay Legend */}
           <div className="google-map-legend-overlay">
             <div className="legend-chip">
@@ -1151,7 +1391,7 @@ export default function GeographicalMapping({
             </div>
             {gpsStatusText && (
               <div className="legend-chip gps-chip">
-                <span>📡 {gpsStatusText}</span>
+                <span><Radio size={11} style={{ display: 'inline', marginRight: '4px' }} /> {gpsStatusText}</span>
               </div>
             )}
           </div>
@@ -1207,6 +1447,298 @@ export default function GeographicalMapping({
                 Confirm Dispatch <span>→</span>
               </button>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* In-App Google GPS Turn-by-Turn Navigation Console Modal */}
+      {isInAppNavOpen && activeRouteNav && (
+        <div
+          className="modal-backdrop"
+          style={{ zIndex: 9999, background: 'rgba(16, 32, 51, 0.75)', backdropFilter: 'blur(8px)' }}
+          onClick={() => setIsInAppNavOpen(false)}
+        >
+          <div
+            className="modal"
+            style={{
+              maxWidth: '560px',
+              width: '95%',
+              padding: 0,
+              overflow: 'hidden',
+              borderRadius: '24px',
+              background: '#ffffff',
+              boxShadow: '0 25px 50px -12px rgba(16, 32, 51, 0.4)',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Top Navigation HUD Header */}
+            <div
+              style={{
+                background: 'linear-gradient(135deg, #0284c7, #102033)',
+                color: '#ffffff',
+                padding: '20px 22px 18px',
+                position: 'relative',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span
+                    style={{
+                      background: '#38bdf8',
+                      color: '#102033',
+                      fontSize: '11px',
+                      fontWeight: 800,
+                      padding: '3px 8px',
+                      borderRadius: '12px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                    }}
+                  >
+                    <Navigation size={12} /> LIVE GPS NAV
+                  </span>
+                  <span style={{ fontSize: '12px', opacity: 0.9 }}>Google Turn-by-Turn Assistant</span>
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      openInGoogleMaps(
+                        activeRouteNav.destLat,
+                        activeRouteNav.destLng,
+                        activeRouteNav.originLat,
+                        activeRouteNav.originLng
+                      )
+                    }
+                    title="Pop out into native Google Maps app"
+                    style={{
+                      background: 'rgba(255,255,255,0.15)',
+                      border: 'none',
+                      color: '#ffffff',
+                      borderRadius: '8px',
+                      padding: '5px 8px',
+                      fontSize: '11px',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                    }}
+                  >
+                    <ExternalLink size={12} /> Pop out
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsInAppNavOpen(false)}
+                    style={{
+                      background: 'rgba(255,255,255,0.2)',
+                      border: 'none',
+                      color: '#ffffff',
+                      borderRadius: '50%',
+                      width: '28px',
+                      height: '28px',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
+              </div>
+
+              {/* Turn Instruction Hero */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                <div
+                  style={{
+                    width: '54px',
+                    height: '54px',
+                    borderRadius: '16px',
+                    background: '#ffffff',
+                    color: '#0284c7',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    boxShadow: '0 4px 14px rgba(0,0,0,0.2)',
+                  }}
+                >
+                  {navStepIndex === 0 ? (
+                    <ArrowUp size={28} strokeWidth={2.5} />
+                  ) : navStepIndex === 1 ? (
+                    <CornerUpRight size={28} strokeWidth={2.5} />
+                  ) : navStepIndex === 2 ? (
+                    <ArrowUp size={28} strokeWidth={2.5} />
+                  ) : (
+                    <Flag size={28} strokeWidth={2.5} color="#0d9488" />
+                  )}
+                </div>
+
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: '13px', opacity: 0.85, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                    {navStepIndex === 0
+                      ? 'In 350 meters'
+                      : navStepIndex === 1
+                        ? 'In 800 meters'
+                        : navStepIndex === 2
+                          ? 'In 1.2 kilometers'
+                          : 'Arrived at Destination'}
+                  </div>
+                  <h3 style={{ margin: '2px 0 0', fontSize: '18px', fontWeight: 800, lineHeight: 1.2 }}>
+                    {navStepIndex === 0
+                      ? 'Head north on Mainline Road toward Sector Hub'
+                      : navStepIndex === 1
+                        ? 'Turn right onto Mabuhay Sector Access Way'
+                        : navStepIndex === 2
+                          ? 'Continue straight toward premise meter terminal'
+                          : `Arrive at ${activeRouteNav.targetName}'s premise`}
+                  </h3>
+                </div>
+              </div>
+            </div>
+
+            {/* Embedded Live Google Maps GPS Viewport */}
+            <div style={{ position: 'relative', width: '100%', height: '350px', background: '#e2e8f0' }}>
+              <iframe
+                title="Google Maps Navigation Viewport"
+                width="100%"
+                height="100%"
+                frameBorder="0"
+                style={{ border: 0 }}
+                src={activeRouteNav.originLat && activeRouteNav.originLng
+                  ? `https://maps.google.com/maps?saddr=${activeRouteNav.originLat},${activeRouteNav.originLng}&daddr=${activeRouteNav.destLat},${activeRouteNav.destLng}&t=${navMapMode}&output=embed`
+                  : `https://maps.google.com/maps?q=${activeRouteNav.destLat},${activeRouteNav.destLng}&t=${navMapMode}&z=17&output=embed`}
+                allowFullScreen
+              />
+
+              {/* Turn Navigation Stepper & Map Mode Controls */}
+              <div
+                style={{
+                  position: 'absolute',
+                  top: '12px',
+                  right: '12px',
+                  background: 'rgba(255,255,255,0.92)',
+                  backdropFilter: 'blur(4px)',
+                  borderRadius: '12px',
+                  padding: '6px 10px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  boxShadow: '0 4px 10px rgba(0,0,0,0.15)',
+                  fontSize: '12px',
+                  fontWeight: 700,
+                  color: '#102033',
+                }}
+              >
+                <button
+                  type="button"
+                  onClick={() => setNavMapMode((prev) => (prev === 'k' ? 'm' : 'k'))}
+                  style={{
+                    background: navMapMode === 'k' ? '#0284c7' : '#e0f2fe',
+                    color: navMapMode === 'k' ? '#ffffff' : '#0284c7',
+                    border: 'none',
+                    borderRadius: '6px',
+                    padding: '3px 8px',
+                    cursor: 'pointer',
+                    fontSize: '11px',
+                    fontWeight: 700,
+                  }}
+                  title="Toggle Satellite / Roadmap"
+                >
+                  {navMapMode === 'k' ? '🛰️ Satellite' : '🗺️ Roads'}
+                </button>
+                <span>Step {navStepIndex + 1} of 4</span>
+                <button
+                  type="button"
+                  disabled={navStepIndex === 0}
+                  onClick={() => setNavStepIndex((prev) => Math.max(0, prev - 1))}
+                  style={{
+                    background: '#e8f0f2',
+                    border: 'none',
+                    borderRadius: '6px',
+                    padding: '3px 8px',
+                    cursor: navStepIndex === 0 ? 'not-allowed' : 'pointer',
+                    opacity: navStepIndex === 0 ? 0.4 : 1,
+                    fontSize: '11px',
+                  }}
+                >
+                  ◀ Prev
+                </button>
+                <button
+                  type="button"
+                  disabled={navStepIndex >= 3}
+                  onClick={() => setNavStepIndex((prev) => Math.min(3, prev + 1))}
+                  style={{
+                    background: '#0284c7',
+                    color: '#fff',
+                    border: 'none',
+                    borderRadius: '6px',
+                    padding: '3px 8px',
+                    cursor: navStepIndex >= 3 ? 'not-allowed' : 'pointer',
+                    opacity: navStepIndex >= 3 ? 0.4 : 1,
+                    fontSize: '11px',
+                  }}
+                >
+                  Next ▶
+                </button>
+              </div>
+            </div>
+
+            {/* Bottom Route Summary & Details Panel */}
+            <div style={{ padding: '16px 20px', background: '#f8fbfa', borderTop: '1px solid #e8f0f2' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <strong style={{ fontSize: '18px', color: '#102033' }}>
+                      {activeRouteNav.durationMin} mins
+                    </strong>
+                    <span style={{ fontSize: '13px', color: '#617286' }}>
+                      ({activeRouteNav.distanceKm} km)
+                    </span>
+                  </div>
+                  <div style={{ fontSize: '12px', color: '#0d9488', fontWeight: 600 }}>
+                    Fastest route via Municipal Road network · Light Traffic
+                  </div>
+                </div>
+
+                <div style={{ textAlign: 'right' }}>
+                  <span style={{ fontSize: '11px', color: '#617286', textTransform: 'uppercase' }}>Destination Premise</span>
+                  <strong style={{ display: 'block', fontSize: '13px', color: '#102033' }}>
+                    {activeRouteNav.targetName}
+                  </strong>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', gap: '10px' }}>
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  onClick={() => setIsInAppNavOpen(false)}
+                  style={{ flex: 1, height: '44px' }}
+                >
+                  End Navigation
+                </button>
+                <button
+                  type="button"
+                  className="primary-button"
+                  onClick={() => {
+                    flash(`Navigation locked on ${activeRouteNav.targetName}. Technician en route.`)
+                    setIsInAppNavOpen(false)
+                  }}
+                  style={{
+                    flex: 1.5,
+                    height: '44px',
+                    background: 'linear-gradient(135deg, #0284c7, #38bdf8)',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '6px',
+                  }}
+                >
+                  <CheckCircle2 size={16} /> Confirm Arrival & Open Ticket
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

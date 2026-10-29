@@ -86,11 +86,6 @@ export default function NotificationsModule({
             FDD Automated Messaging Engine: Dispatch Billing Notices, Payment Reminders, and Statutory Overdue Notices
           </p>
         </div>
-        <div className="header-badge-group">
-          <button className="btn-primary-sm" onClick={handleBroadcastOverdue}>
-            ⚡ Blast Overdue Notices ({overdueBills.length})
-          </button>
-        </div>
       </div>
 
       {/* Tabs */}

@@ -1,12 +1,20 @@
 import { useState } from 'react'
+import {
+  LayoutDashboard,
+  Calculator,
+  Gauge,
+  MapPin,
+  LifeBuoy,
+  LogOut
+} from 'lucide-react'
 import './FieldStaffNavigation.css'
 
 const fieldDestinations = [
-  ['Overview', '⌂', 'Home'],
-  ['Consumption Calculator', '◷', 'Read Meter'],
-  ['Meter Assets', '▣', 'Meters'],
-  ['Geographical Mapping', '⌖', 'Field map'],
-  ['Service Desk', '⚒', 'Tickets'],
+  ['Overview', LayoutDashboard, 'Home'],
+  ['Consumption Calculator', Calculator, 'Read Meter'],
+  ['Meter Assets', Gauge, 'Meters'],
+  ['Geographical Mapping', MapPin, 'Field map'],
+  ['Service Desk', LifeBuoy, 'Tickets'],
 ]
 
 export default function FieldStaffNavigation({ activeNav, onNavigate, complaints = [], onSignOut }) {
@@ -30,20 +38,28 @@ export default function FieldStaffNavigation({ activeNav, onNavigate, complaints
       </button>
       {isOpen && (
         <nav className="field-staff-menu" aria-label="Field Staff Navigation">
-          {fieldDestinations.map(([destination, icon, label]) => (
+          {fieldDestinations.map(([destination, IconComponent, label]) => (
             <button
               type="button"
               key={destination}
               className={activeNav === destination ? 'active' : ''}
               onClick={() => openDestination(destination)}
             >
-              <span className="field-menu-icon">{icon}</span>
+              <span className="field-menu-icon">
+                {typeof IconComponent === 'function' || (typeof IconComponent === 'object' && IconComponent !== null) ? (
+                  <IconComponent size={18} strokeWidth={2} />
+                ) : (
+                  IconComponent
+                )}
+              </span>
               <span>{label}</span>
               {destination === 'Service Desk' && openTickets > 0 && <b>{openTickets}</b>}
             </button>
           ))}
           <button type="button" className="field-menu-signout" onClick={onSignOut}>
-            <span className="field-menu-icon">↪</span>
+            <span className="field-menu-icon">
+              <LogOut size={18} strokeWidth={2} />
+            </span>
             <span>Sign out</span>
           </button>
         </nav>

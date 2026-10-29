@@ -1,15 +1,26 @@
 @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700;800&display=swap');
 
 :root {
-  --ink: #112c3d;
-  --muted: #526872;
-  --line: #e3eaed;
-  --aqua: #08b9ae;
-  --navy: #102f42;
-  --orange: #f28d5d;
-  --bg: #f5f8f8;
-  --success: #22c55e;
-  --danger: #ef4444;
+  /* Design System Palette */
+  --ocean-blue: #0284c7;        /* Primary — CTAs, active nav, avatar, buttons */
+  --sky-cyan: #38bdf8;          /* Accent — gradient tail, highlights, view-all */
+  --fog-white: #e8f0f2;         /* Surface — base, card/input backgrounds */
+  --ink-navy: #102033;          /* Text — headings */
+  --ink-muted: #617286;         /* Text — secondary / muted */
+  --seafoam-teal: #0d9488;      /* Success — paid status, positive amounts, live dots */
+  --warm-amber: #d97706;        /* Alert — overdue bills, service warnings, in-progress */
+  --amber-pill-bg: #f5edd3;     /* Tinted pill bg for WCAG contrast */
+
+  /* Legacy semantic mappings aligned to new palette */
+  --ink: var(--ink-navy);
+  --muted: var(--ink-muted);
+  --line: #d8e2e6;
+  --aqua: var(--ocean-blue);
+  --navy: var(--ink-navy);
+  --orange: var(--warm-amber);
+  --bg: var(--fog-white);
+  --success: var(--seafoam-teal);
+  --danger: var(--warm-amber);
   --card: #ffffff;
 }
 
@@ -63,7 +74,7 @@ button {
   display: flex;
   align-items: center;
   gap: 11px;
-  padding: 0 10px 28px;
+  padding: 0 10px 16px;
   color: #fff;
   user-select: none;
 }
@@ -142,10 +153,15 @@ button {
 
 .nav-item i {
   width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   font-style: normal;
   font-size: 16px;
   color: #76929e;
   text-align: center;
+  flex-shrink: 0;
 }
 
 .nav-item:hover {
@@ -154,14 +170,14 @@ button {
 }
 
 .nav-item.active {
-  background: #1b4558;
+  background: #19364a;
   color: #fff;
   font-weight: 600;
-  box-shadow: inset 3px 0 var(--aqua);
+  box-shadow: inset 3px 0 var(--ocean-blue);
 }
 
 .nav-item.active i {
-  color: var(--aqua);
+  color: var(--sky-cyan);
 }
 
 @keyframes badgePopIn {
@@ -183,8 +199,8 @@ button {
 .nav-item b {
   margin-left: auto;
   font-size: 10px;
-  color: #122f40;
-  background: #f6ad79;
+  color: #fff;
+  background: var(--ocean-blue);
   padding: 2px 6px;
   border-radius: 10px;
   animation: badgePopIn 0.22s cubic-bezier(0.175, 0.885, 0.32, 1.275);
@@ -195,13 +211,15 @@ button {
 }
 
 .badge-alert-pill {
-  background: #fca5a5 !important;
-  color: #991b1b !important;
+  background: var(--amber-pill-bg) !important;
+  color: var(--warm-amber) !important;
+  font-weight: 700;
 }
 
 .badge-service-pill {
-  background: #a7f3d0 !important;
-  color: #065f46 !important;
+  background: #d1fae5 !important;
+  color: var(--seafoam-teal) !important;
+  font-weight: 700;
 }
 
 .sidebar-bottom {
@@ -214,24 +232,126 @@ button {
   display: none;
 }
 
-.user-chip {
-  margin: 14px 4px 0;
-  padding-top: 14px;
-  border-top: 1px solid #234657;
+/* Upper Right Topbar User Profile & Sign Out */
+.topbar-user-section {
   display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-left: 12px;
+  border-left: 1px solid var(--line);
+}
+
+.topbar-user-chip {
+  display: flex;
+  align-items: center;
   gap: 9px;
+  padding: 4px 8px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.topbar-user-chip:hover {
+  background: #f1f5f7;
+}
+
+.topbar-user-details {
+  display: flex;
+  flex-direction: column;
+}
+
+.topbar-user-details strong {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ink);
+  line-height: 1.2;
+}
+
+.topbar-user-details small {
+  font-size: 10px;
+  color: #7b8e96;
+}
+
+.topbar-signout-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #64748b;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.topbar-signout-btn:hover {
+  background: #fef2f2;
+  border-color: #fecaca;
+  color: #ef4444;
+}
+
+.user-chip {
+  margin: 0 4px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  display: flex;
+  gap: 10px;
   align-items: center;
   color: #fff;
+  background: rgba(255, 255, 255, 0.04);
+  transition: all 0.15s ease;
+}
+
+.user-chip:hover {
+  background: #163a4d;
+}
+
+.user-chip .user-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
 }
 
 .user-chip strong {
   display: block;
-  font-size: 11px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .user-chip small {
   color: #70909d;
   font-size: 10px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.user-signout-btn {
+  margin-left: auto;
+  background: transparent;
+  border: 0;
+  color: #7896a2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  cursor: pointer;
+  padding: 0;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+
+.user-signout-btn:hover {
+  background: rgba(239, 68, 68, 0.15);
+  color: #f87171;
 }
 
 .user-chip>span {
@@ -435,18 +555,18 @@ button {
 /* Buttons */
 .primary-button {
   border: 0;
-  background: var(--aqua);
+  background: var(--ocean-blue);
   color: #fff;
   padding: 10px 16px;
   border-radius: 6px;
   font-size: 12px;
   font-weight: 700;
-  box-shadow: 0 4px 10px rgba(8, 185, 174, 0.25);
+  box-shadow: 0 4px 12px rgba(2, 132, 199, 0.28);
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 6px;
-  transition: opacity 0.15s ease;
+  transition: all 0.15s ease;
 }
 
 .primary-button:hover {
@@ -1676,28 +1796,33 @@ button {
 }
 
 .google-pin-head {
-  width: 30px;
-  height: 30px;
+  width: 28px;
+  height: 28px;
   border-radius: 50%;
-  background: var(--aqua);
-  border: 2px solid #fff;
-  display: grid;
-  place-items: center;
-  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.28);
+  background: #0284c7;
+  border: 2px solid #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.25);
   position: relative;
   z-index: 2;
+  color: #ffffff;
 }
 
 .google-pin-icon {
-  font-size: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
 }
 
 .google-pin-tip {
   width: 0;
   height: 0;
-  border-left: 6px solid transparent;
-  border-right: 6px solid transparent;
-  border-top: 8px solid var(--aqua);
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-top: 7px solid #0284c7;
   margin-top: -1px;
   position: relative;
   z-index: 1;
@@ -1705,71 +1830,83 @@ button {
 
 .google-pin-label {
   position: absolute;
-  top: -20px;
-  background: rgba(16, 47, 66, 0.9);
-  color: #fff;
-  font-size: 9px;
+  top: -22px;
+  background: rgba(16, 32, 51, 0.92);
+  color: #ffffff;
+  font-size: 10px;
   font-weight: 700;
-  padding: 2px 6px;
-  border-radius: 4px;
+  padding: 2px 7px;
+  border-radius: 6px;
   white-space: nowrap;
   pointer-events: none;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  letter-spacing: 0.02em;
 }
 
 .google-pin-pulse {
   position: absolute;
   width: 36px;
   height: 36px;
-  top: -3px;
+  top: -4px;
   border-radius: 50%;
-  background: rgba(8, 185, 174, 0.35);
+  background: rgba(2, 132, 199, 0.35);
   animation: pinPulse 2s infinite ease-out;
   pointer-events: none;
 }
 
-/* Status variants */
+/* Status variants aligning with app tokens */
 .google-pin-marker.normal .google-pin-head {
-  background: var(--aqua);
+  background: #0284c7;
 }
 
 .google-pin-marker.normal .google-pin-tip {
-  border-top-color: var(--aqua);
+  border-top-color: #0284c7;
+}
+
+.google-pin-marker.normal .google-pin-pulse {
+  background: rgba(2, 132, 199, 0.35);
 }
 
 .google-pin-marker.overdue .google-pin-head {
-  background: var(--orange);
+  background: #d97706;
 }
 
 .google-pin-marker.overdue .google-pin-tip {
-  border-top-color: var(--orange);
+  border-top-color: #d97706;
 }
 
 .google-pin-marker.overdue .google-pin-pulse {
-  background: rgba(242, 141, 93, 0.4);
+  background: rgba(217, 119, 6, 0.35);
 }
 
-.google-pin-marker.maintenance .google-pin-head {
-  background: #3b82f6;
+.google-pin-marker.maintenance .google-pin-head,
+.google-pin-marker.issue .google-pin-head,
+.google-pin-marker.disconnected .google-pin-head {
+  background: #ef4444;
 }
 
-.google-pin-marker.maintenance .google-pin-tip {
-  border-top-color: #3b82f6;
+.google-pin-marker.maintenance .google-pin-tip,
+.google-pin-marker.issue .google-pin-tip,
+.google-pin-marker.disconnected .google-pin-tip {
+  border-top-color: #ef4444;
 }
 
-.google-pin-marker.maintenance .google-pin-pulse {
-  background: rgba(59, 130, 246, 0.4);
+.google-pin-marker.maintenance .google-pin-pulse,
+.google-pin-marker.issue .google-pin-pulse,
+.google-pin-marker.disconnected .google-pin-pulse {
+  background: rgba(239, 68, 68, 0.35);
 }
 
 /* Selected & Pinning Target Marker Highlights */
 .google-pin-marker.marker-selected {
-  transform: scale(1.25) translateY(-6px);
+  transform: scale(1.22) translateY(-5px);
   z-index: 100 !important;
 }
 
 .google-pin-marker.marker-selected .google-pin-head {
-  border-color: #facc15;
-  box-shadow: 0 0 0 3px rgba(250, 204, 21, 0.5), 0 4px 12px rgba(0, 0, 0, 0.3);
+  border-color: #ffffff;
+  box-shadow: 0 0 0 3px #38bdf8, 0 4px 14px rgba(2, 132, 199, 0.5);
 }
 
 .google-pin-marker.marker-pinning-target .google-pin-head {
@@ -4113,8 +4250,8 @@ button {
   color: #069087;
 }
 
-/* Public Tariff Showcase */
-.tariff-showcase-container {
+/* Public fixed-rate billing estimate */
+.billing-estimate-container {
   max-width: 1200px;
   margin: 0 auto;
   display: grid;
@@ -4123,20 +4260,20 @@ button {
   align-items: center;
 }
 
-.tariff-left-copy h2 {
+.billing-estimate-copy h2 {
   font-size: 32px;
   letter-spacing: -0.8px;
   margin: 8px 0 14px;
   color: var(--navy);
 }
 
-.tariff-left-copy p {
+.billing-estimate-copy p {
   font-size: 14px;
   color: #64748b;
   line-height: 1.6;
 }
 
-.tariff-brackets-table {
+.billing-estimate-breakdown {
   background: #f8fafc;
   border: 1px solid #e2e8f0;
   border-radius: 8px;
@@ -4144,13 +4281,13 @@ button {
   margin-top: 20px;
 }
 
-.tariff-brackets-table h4 {
+.billing-estimate-breakdown h4 {
   margin: 0 0 12px;
   font-size: 13px;
   color: var(--navy);
 }
 
-.tariff-brackets-table ul {
+.billing-estimate-breakdown ul {
   list-style: none;
   padding: 0;
   margin: 0;
@@ -4159,18 +4296,18 @@ button {
   gap: 8px;
 }
 
-.tariff-brackets-table li {
+.billing-estimate-breakdown li {
   display: flex;
   justify-content: space-between;
   font-size: 12px;
   color: #475569;
 }
 
-.tariff-brackets-table li strong {
+.billing-estimate-breakdown li strong {
   color: var(--navy);
 }
 
-.tariff-interactive-card {
+.billing-estimate-card {
   background: #fff;
   border: 1px solid #dceae6;
   border-radius: 12px;
@@ -4178,7 +4315,7 @@ button {
   box-shadow: 0 10px 30px rgba(8, 185, 174, 0.08);
 }
 
-.tariff-interactive-card h3 {
+.billing-estimate-card h3 {
   margin: 0 0 4px;
   font-size: 18px;
   color: var(--navy);
@@ -4190,35 +4327,12 @@ button {
   margin: 0 0 18px;
 }
 
-.tariff-field-label {
+.billing-estimate-label {
   display: block;
   font-size: 11.5px;
   font-weight: 600;
   color: #475569;
   margin-bottom: 8px;
-}
-
-.tariff-radio-group {
-  display: flex;
-  gap: 8px;
-  margin-bottom: 16px;
-}
-
-.tariff-radio-group button {
-  flex: 1;
-  border: 1px solid #dce4e6;
-  background: #f8fafb;
-  padding: 7px;
-  border-radius: 6px;
-  font-size: 12px;
-  font-weight: 600;
-  color: #475569;
-}
-
-.tariff-radio-group button.active {
-  background: var(--navy);
-  color: #fff;
-  border-color: var(--navy);
 }
 
 .usage-slider {
@@ -4228,7 +4342,7 @@ button {
   margin-bottom: 18px;
 }
 
-.tariff-output-box {
+.billing-estimate-output {
   background: #f8fafc;
   border: 1px solid #eef2f6;
   border-radius: 8px;
@@ -5308,7 +5422,7 @@ button {
     grid-template-columns: repeat(2, 1fr);
   }
 
-  .tariff-showcase-container {
+  .billing-estimate-container {
     grid-template-columns: 1fr;
   }
 

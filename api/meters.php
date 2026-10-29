@@ -4,6 +4,63 @@ require_once __DIR__ . '/db.php';
 $pdo = getDBConnection();
 $method = $_SERVER['REQUEST_METHOD'];
 
+if ($method === 'DELETE') {
+    $input = getJsonInput();
+    $serialNo = trim($input['serialNo'] ?? $input['id'] ?? '');
+    $actorRole = trim($input['actorRole'] ?? '');
+
+    if ($actorRole !== 'President' && $actorRole !== 'Administrator') {
+        sendJsonResponse(['success' => false, 'error' => 'Only the President can remove meter assets.'], 403);
+    }
+    if ($serialNo === '') {
+        sendJsonResponse(['success' => false, 'error' => 'Meter serial number is required.'], 400);
+    }
+
+    try {
+        $pdo->beginTransaction();
+        $meterStmt = $pdo->prepare('SELECT id, serial_no, brand, model FROM meter_assets WHERE serial_no = ? OR id = ? LIMIT 1');
+        $meterStmt->execute([$serialNo, $serialNo]);
+        $meter = $meterStmt->fetch();
+        if (!$meter) {
+            $pdo->rollBack();
+            sendJsonResponse(['success' => false, 'error' => 'Meter asset not found.'], 404);
+        }
+
+        // Delete associated calibration logs first
+        $delCals = $pdo->prepare('DELETE FROM meter_calibrations WHERE meter_id = ?');
+        $delCals->execute([$meter['id']]);
+
+        // Unlink or delete meter
+        $delMeter = $pdo->prepare('DELETE FROM meter_assets WHERE id = ?');
+        $delMeter->execute([$meter['id']]);
+
+        // Audit log
+        $insAudit = $pdo->prepare("
+            INSERT INTO audit_trail (log_code, user_id, user_name, user_role, category, action, target_entity, details, ip_address)
+            VALUES (?, 1, 'President', ?, 'Meter', 'Removed Meter Asset', ?, ?, ?)
+        ");
+        $logCode = 'AUD-' . rand(1000, 9999);
+        $insAudit->execute([
+            $logCode,
+            $actorRole,
+            $meter['serial_no'],
+            "Permanently removed meter {$meter['brand']} ({$meter['serial_no']}) from registry.",
+            $_SERVER['REMOTE_ADDR'] ?? '127.0.0.1'
+        ]);
+
+        $pdo->commit();
+        sendJsonResponse([
+            'success' => true,
+            'deleted' => [
+                'serialNo' => $meter['serial_no'],
+            ],
+        ]);
+    } catch (Throwable $e) {
+        if ($pdo->inTransaction()) $pdo->rollBack();
+        sendJsonResponse(['success' => false, 'error' => $e->getMessage()], 500);
+    }
+}
+
 if ($method === 'GET') {
     $stmt = $pdo->query("SELECT * FROM meter_assets ORDER BY id DESC");
     sendJsonResponse(['success' => true, 'data' => $stmt->fetchAll()]);

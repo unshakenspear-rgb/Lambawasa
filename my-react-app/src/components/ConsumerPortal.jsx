@@ -1,7 +1,42 @@
 import React, { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
+import {
+  CreditCard,
+  FileText,
+  Receipt,
+  BarChart3,
+  Droplets,
+  Wrench,
+  User,
+  Bell,
+  Home,
+  LogOut,
+  Eye,
+  EyeOff,
+  Copy,
+  Check,
+  ChevronRight,
+  Sparkles,
+  Search,
+  ArrowUpRight,
+  ShieldCheck,
+  MapPin,
+  Clock,
+  AlertCircle
+} from 'lucide-react'
 import L from '../services/leaflet'
 import 'leaflet/dist/leaflet.css'
 import './ConsumerPortal.css'
+import gcashOfficialLogo from '../assets/gcash-official.svg'
+import { api } from '../services/api'
+
+const createPaymentIdentifiers = () => {
+  const timestamp = Date.now()
+  return {
+    id: `PAY-${timestamp}`,
+    orNumber: `OR-${new Date().getFullYear()}-${timestamp}`,
+  }
+}
 
 export default function ConsumerPortal({
   currentUser,
@@ -21,6 +56,7 @@ export default function ConsumerPortal({
   // Navigation & View States
   const [activeTab, setActiveTab] = useState('home') // 'home' | 'bills' | 'usage' | 'service' | 'account' | 'history'
   const [activeModal, setActiveModal] = useState(null) // 'pay' | 'receipt' | 'ticket' | 'meter' | 'dossier' | 'notice' | 'reportSent'
+  const [showSignOutConfirm, setShowSignOutConfirm] = useState(false)
   const [hideBalance, setHideBalance] = useState(false)
   const [copiedAccount, setCopiedAccount] = useState(false)
   const [selectedReceipt, setSelectedReceipt] = useState(null)
@@ -28,14 +64,53 @@ export default function ConsumerPortal({
   const [selectedNotification, setSelectedNotification] = useState(null)
   const [submittedReport, setSubmittedReport] = useState(null)
   const [profileEmail, setProfileEmail] = useState(currentUser.email || '')
+  const [profileContact, setProfileContact] = useState(currentUser.contact || '')
   const [newPassword, setNewPassword] = useState('')
   const [confirmNewPassword, setConfirmNewPassword] = useState('')
   const profileMapRef = useRef(null)
   const profileMapInstanceRef = useRef(null)
+  const paymongoVerificationInProgressRef = useRef(false)
+  const paymongoCheckoutStorageKey = `paymongo-checkout:${currentUser.accountNo || currentUser.consumerId || currentUser.username || 'consumer'}`
 
   // Payment Form States
-  const [payMethod, setPayMethod] = useState('GCash')
+  const [payMethod, setPayMethod] = useState('PayMongo')
+  const [payContact, setPayContact] = useState(currentUser.contact || '')
   const [isPaying, setIsPaying] = useState(false)
+  const [paymongoConfig, setPaymongoConfig] = useState(null)
+  const [paymongoVerificationMessage, setPaymongoVerificationMessage] = useState('')
+  const [paymongoCheckout, setPaymongoCheckout] = useState(() => {
+    try {
+      const savedCheckout = sessionStorage.getItem(paymongoCheckoutStorageKey)
+      const checkout = savedCheckout ? JSON.parse(savedCheckout) : null
+      const checkoutUrl = new URL(checkout?.checkoutUrl)
+
+      return checkout?.sessionId
+        && checkout?.billId
+        && checkoutUrl.origin === 'https://checkout.paymongo.com'
+        ? checkout
+        : null
+    } catch (error) {
+      if (error instanceof SyntaxError || error instanceof TypeError) {
+        return null
+      }
+      console.error('Could not restore PayMongo checkout session:', error)
+      return null
+    }
+  })
+  const paymongoCheckoutUrl = paymongoCheckout?.checkoutUrl || null
+  const paymongoSessionId = paymongoCheckout?.sessionId || null
+
+  useEffect(() => {
+    if (activeModal !== 'pay') return undefined
+
+    let isCurrent = true
+    api.getPaymongoConfig().then((config) => {
+      if (isCurrent) setPaymongoConfig(config)
+    })
+    return () => {
+      isCurrent = false
+    }
+  }, [activeModal])
 
   // Complaint Form States
   const [issueType, setIssueType] = useState('Low Water Pressure')
@@ -43,28 +118,41 @@ export default function ConsumerPortal({
   const [description, setDescription] = useState('')
   const [landmarkLocation, setLandmarkLocation] = useState(currentUser.address || '')
 
-  // Identify active consumer record
+  useEffect(() => {
+    try {
+      if (paymongoCheckout) {
+        sessionStorage.setItem(paymongoCheckoutStorageKey, JSON.stringify(paymongoCheckout))
+      } else {
+        sessionStorage.removeItem(paymongoCheckoutStorageKey)
+      }
+    } catch (error) {
+      console.error('Could not save PayMongo checkout session:', error)
+    }
+  }, [paymongoCheckout, paymongoCheckoutStorageKey])
+
+  // Identify active consumer record — match strictly by ID or accountNo only.
+  // Never fall through to fullName (too loose) to avoid showing another consumer's data.
   const activeConsumer =
     consumers.find(
       (c) =>
         (currentUser.consumerId && c.id === currentUser.consumerId) ||
         (currentUser.accountNo && c.accountNo === currentUser.accountNo) ||
-        (currentUser.username && c.username?.toLowerCase() === currentUser.username.toLowerCase()) ||
-        (currentUser.fullName && c.name?.toLowerCase() === currentUser.fullName.toLowerCase())
+        (currentUser.username && c.username?.toLowerCase() === currentUser.username.toLowerCase())
     ) || {
-      id: currentUser.consumerId || 'C-1001',
-      accountNo: currentUser.accountNo || 'ACC-88201',
-      name: currentUser.fullName || 'Amina Okafor',
-      contact: currentUser.contact || '+63 917 234 5678',
-      address: currentUser.address || 'Block 4 Lot 12, Riverdale Heights',
+      // Fallback built entirely from currentUser — never shows another consumer's data
+      id: currentUser.consumerId || '',
+      accountNo: currentUser.accountNo || '',
+      name: currentUser.fullName || '',
+      contact: currentUser.contact || '',
+      address: currentUser.address || '',
       email: currentUser.email || '',
-      zone: currentUser.zone || 'Mabuhay',
+      zone: currentUser.zone || '',
       classification: currentUser.classification || 'Residential',
-      meterNo: currentUser.meterNo || 'MTR-77291',
-      status: 'Active',
-      connectionDate: '2024-03-15',
-      lastReading: 148,
-      avatar: currentUser.avatar || 'AO',
+      meterNo: currentUser.meterNo || '',
+      status: currentUser.isNewAccount ? 'Pending Approval' : 'Active',
+      connectionDate: '',
+      lastReading: 0,
+      avatar: currentUser.avatar || '',
     }
 
   const activeGeoPin = geoPins.find(
@@ -126,12 +214,27 @@ export default function ConsumerPortal({
       || notification.recipient === activeConsumer.name
   )
   const isNewConsumer = Boolean(activeConsumer.isNewAccount || currentUser.isNewAccount)
+  const getBillBalance = (bill) => {
+    const paid = myPayments
+      .filter((payment) => payment.billId === bill.id)
+      .reduce((total, payment) => total + Number(payment.amountPaid || 0), 0)
+    return Math.max(0, Number((Number(bill.totalAmount || 0) - paid).toFixed(2)))
+  }
 
   useEffect(() => {
     if (activeConsumer.address && !landmarkLocation) {
       setLandmarkLocation(activeConsumer.address)
     }
-  }, [activeConsumer.address, landmarkLocation])
+    if (activeConsumer.contact && !profileContact) {
+      setProfileContact(activeConsumer.contact)
+    }
+    if (activeConsumer.contact && !payContact) {
+      setPayContact(activeConsumer.contact)
+    }
+    if (activeConsumer.email && !profileEmail) {
+      setProfileEmail(activeConsumer.email)
+    }
+  }, [activeConsumer.address, activeConsumer.contact, activeConsumer.email, landmarkLocation, profileContact, payContact, profileEmail])
 
   const handleProfileUpdate = (event) => {
     event.preventDefault()
@@ -146,18 +249,28 @@ export default function ConsumerPortal({
 
     setNewPassword('')
     setConfirmNewPassword('')
+    if (profileContact.trim()) {
+      setPayContact(profileContact.trim())
+    }
     if (onUpdateProfile) {
       onUpdateProfile({
         email: profileEmail.trim(),
+        contact: profileContact.trim(),
         password: newPassword || undefined,
       })
     }
-    if (flash) flash('Profile details updated successfully.')
+    if (flash) flash('Profile contact & details updated successfully.')
   }
 
-  const unpaidBill = myBills.find((b) => b.status === 'Ready' || b.status === 'Overdue')
-  const hasCurrentStatement = myBills.length > 0
-  const latestBill = unpaidBill || myBills[0] || {
+  const unpaidBill = myBills.find(
+    (bill) => (bill.status === 'Ready' || bill.status === 'Overdue') && getBillBalance(bill) > 0
+  )
+  const unpaidAmount = unpaidBill ? getBillBalance(unpaidBill) : 0
+  const activeCheckoutBill = paymongoCheckout
+    ? myBills.find((bill) => bill.id === paymongoCheckout.billId)
+    : null
+  const hasCurrentStatement = Boolean(unpaidBill)
+  const latestBill = unpaidBill || {
     id: null,
     totalAmount: 0,
     consumption: 0,
@@ -171,9 +284,25 @@ export default function ConsumerPortal({
     penalty: 0,
   }
 
+  // Consumers with arrears, overdue penalties, or Overdue status cannot pay via online GCash (must be over-the-counter)
+  const hasArrearsOrPenalty = Boolean(
+    (Number(latestBill.arrears || 0) > 0) ||
+    (Number(latestBill.penalty || 0) > 0) ||
+    (latestBill.status === 'Overdue')
+  )
+  const isBelowPaymongoMinimum = Boolean(
+    unpaidBill && unpaidAmount < 20
+  )
+
   const receiptBill = selectedReceipt
     ? myBills.find((bill) => bill.id === selectedReceipt.billId)
     : null
+
+  useEffect(() => {
+    if (activeCheckoutBill?.status === 'Paid') {
+      setPaymongoCheckout(null)
+    }
+  }, [activeCheckoutBill?.status])
   const receiptPenalty = Number(selectedReceipt?.penalty ?? receiptBill?.penalty ?? 0)
   const receiptPreviousReading = Number(selectedReceipt?.prevReading ?? receiptBill?.prevReading ?? 0)
   const receiptPresentReading = Number(selectedReceipt?.presReading ?? receiptBill?.presReading ?? 0)
@@ -187,48 +316,193 @@ export default function ConsumerPortal({
     if (flash) flash(`Account number ${activeConsumer.accountNo} copied to clipboard!`)
   }
 
-  // Submit Online Payment
-  const handlePaySubmit = (e) => {
+  // Submit Online Payment via PayMongo Gateway
+  const handlePaySubmit = async (e) => {
     e.preventDefault()
     if (!unpaidBill) {
       if (flash) flash(hasCurrentStatement ? 'All statement obligations are settled!' : 'No payable statement is available yet. Billing is calculated at month-end.')
       return
     }
 
+    if (hasArrearsOrPenalty) {
+      if (flash) flash('Accounts with arrears or overdue penalties cannot be paid online. Settlement must be made over the counter at the municipal cashier.')
+      return
+    }
+
     const billToPay = unpaidBill
+    if (!paymongoConfig?.configured) {
+      const errorMessage = paymongoConfig?.error
+        || 'Checking PayMongo configuration. Please wait a moment and try again.'
+      setPaymongoVerificationMessage(errorMessage)
+      if (flash) flash(errorMessage)
+      return
+    }
+    if (unpaidAmount < 20) {
+      if (flash) flash('PayMongo requires at least ₱20.00. Please pay this bill for its exact amount at the cashier.')
+      return
+    }
     setIsPaying(true)
 
-    setTimeout(() => {
-      const orNumber = `OR-2026-${Math.floor(1000 + Math.random() * 9000)}`
+    try {
+      // 1. Initialize Checkout Session with PayMongo
+      const effectiveContact = payContact.trim() || activeConsumer.contact || currentUser.contact || ''
+      const checkoutRes = await api.createPaymongoCheckout({
+        billId: billToPay.id,
+        consumerName: activeConsumer.name,
+        consumerEmail: activeConsumer.email || currentUser.email || '',
+        consumerPhone: effectiveContact,
+        accountNo: activeConsumer.accountNo,
+        amount: unpaidAmount,
+        description: `Water Statement ${billToPay.id} (${activeConsumer.accountNo}) - Lambawasa Water`,
+      })
+
+      if (checkoutRes?.success && checkoutRes.checkoutUrl && checkoutRes.sessionId) {
+        const checkout = {
+          checkoutUrl: checkoutRes.checkoutUrl,
+          sessionId: checkoutRes.sessionId,
+          billId: billToPay.id,
+          accountNo: activeConsumer.accountNo,
+          amount: Number(checkoutRes.amount ?? unpaidAmount),
+          mode: checkoutRes.mode,
+        }
+        try {
+          sessionStorage.setItem(paymongoCheckoutStorageKey, JSON.stringify(checkout))
+        } catch (error) {
+          console.error('Could not persist PayMongo checkout session:', error)
+        }
+        setPaymongoCheckout(checkout)
+        setPaymongoVerificationMessage('')
+
+        // Open PayMongo Secure Checkout page in a new tab for seamless consumer experience
+        window.open(checkoutRes.checkoutUrl, '_blank', 'noopener,noreferrer')
+        if (flash) flash(
+          checkout.mode === 'test'
+            ? 'PayMongo is in test mode. This checkout will not move real money or create a payout. Configure a live secret key to accept real payments.'
+            : 'PayMongo Checkout window opened. Please complete your payment in GCash, Maya, GrabPay, or Card!'
+        )
+      } else {
+        console.warn('PayMongo checkout init error:', checkoutRes?.error)
+        if (flash) flash(checkoutRes?.error || 'PayMongo could not start checkout. No payment was recorded; please try again later.')
+      }
+    } catch (err) {
+      console.error('handlePaySubmit error:', err)
+      if (flash) flash('Payment processing error: ' + err.message)
+    } finally {
+      setIsPaying(false)
+    }
+  }
+
+  // Verify and finalize PayMongo session payment
+  const handleVerifyAndFinalizePayment = async () => {
+    if (paymongoVerificationInProgressRef.current) {
+      setPaymongoVerificationMessage('Payment verification is already in progress. Please wait for the result.')
+      return
+    }
+    if (!paymongoSessionId || !paymongoCheckout) {
+      setPaymongoVerificationMessage('Checkout details are missing. Reopen the checkout from this account and try again.')
+      return
+    }
+    paymongoVerificationInProgressRef.current = true
+    setPaymongoVerificationMessage('Checking your payment with PayMongo…')
+    setIsPaying(true)
+
+    try {
+      const verifyRes = await api.verifyPaymongoSession(paymongoSessionId)
+      if (!verifyRes?.success) {
+        throw new Error(verifyRes?.error || 'Could not verify this payment with PayMongo. Please try again.')
+      }
+      if (verifyRes.status !== 'paid') {
+        const message = 'PayMongo has not confirmed this payment yet. Complete the checkout, then try Verify & Complete again.'
+        setPaymongoVerificationMessage(message)
+        if (flash) flash(message)
+        return
+      }
+      if (
+        !verifyRes.billFound
+        || verifyRes.billId !== paymongoCheckout.billId
+        || verifyRes.accountNo !== paymongoCheckout.accountNo
+        || verifyRes.accountNo !== activeConsumer.accountNo
+      ) {
+        const message = 'This confirmed checkout does not match the current consumer account and bill. No receipt was issued. Please contact the cashier to reconcile it.'
+        setPaymongoVerificationMessage(message)
+        if (flash) flash(message)
+        return
+      }
+      if (!verifyRes.amountMatchesBill) {
+        const verifiedAmount = Number(verifyRes.sessionAmount)
+        const message = verifiedAmount > 0
+          ? `The confirmed checkout amount (₱${verifiedAmount.toFixed(2)}) does not match the remaining balance for bill ${verifyRes.billId} (₱${Number(verifyRes.remainingAmount || 0).toFixed(2)}). No receipt was issued.`
+          : 'PayMongo confirmed the checkout, but its transaction amount was not included in the response. No receipt was issued. Please try Verify & Complete again.'
+        setPaymongoVerificationMessage(message)
+        if (flash) flash(message)
+        return
+      }
+
+      const billToPay = activeCheckoutBill
+      if (!billToPay) {
+        const message = 'PayMongo confirmed this payment, but the bill is not loaded in this portal yet. Refresh the page and verify again; the payment will not be charged again.'
+        setPaymongoVerificationMessage(message)
+        if (flash) flash(message)
+        return
+      }
+      setPaymongoVerificationMessage('Payment confirmed. Saving your bill payment…')
+      const paidMethodName = `PayMongo (${verifyRes.paymentMethod || 'Online'})`
+
+      const { id: paymentId, orNumber } = createPaymentIdentifiers()
       const paymentRecord = {
-        id: `PAY-${Date.now()}`,
+        id: paymentId,
         orNumber,
+        gatewayReference: paymongoSessionId,
         billId: billToPay.id,
         consumerId: activeConsumer.id,
         consumerName: activeConsumer.name,
         accountNo: activeConsumer.accountNo,
-        amountPaid: billToPay.totalAmount,
+        amountPaid: Number(verifyRes.sessionAmount),
         penalty: billToPay.penalty || 0,
         arrears: billToPay.arrears || 0,
         prevReading: billToPay.prevReading || 0,
         presReading: billToPay.presReading || 0,
         consumption: billToPay.consumption || 0,
-        tendered: billToPay.totalAmount,
+        tendered: Number(verifyRes.sessionAmount),
         change: 0.0,
-        method: payMethod,
+        method: paidMethodName,
         date: new Date().toISOString().replace('T', ' ').slice(0, 19),
-        cashier: `Online Payment Gateway (${payMethod})`,
-        notes: `Over-the-counter online settlement via ${payMethod}.`,
+        cashier: `PayMongo Payment Gateway`,
+        notes: `PayMongo Checkout verified settlement (${paymongoSessionId || 'Session'}).`,
       }
 
-      if (onPayBillOnline) {
-        onPayBillOnline(billToPay.id, paymentRecord)
+      if (!onPayBillOnline) {
+        throw new Error('Payment saving is unavailable. The bill remains unpaid.')
       }
-      setIsPaying(false)
-      setSelectedReceipt(paymentRecord)
+      const paymentResult = await onPayBillOnline(billToPay.id, paymentRecord)
+      const paymentSaved = Boolean(paymentResult)
+      if (!paymentSaved) {
+        throw new Error('Payment could not be saved. The bill remains unpaid.')
+      }
+      const finalizedPaymentRecord = {
+        ...paymentRecord,
+        id: paymentResult.id ?? paymentRecord.id,
+        orNumber: paymentResult.orNumber ?? paymentRecord.orNumber,
+        amountPaid: Number(paymentResult.amountPaid ?? paymentRecord.amountPaid),
+        remainingAmount: Number(paymentResult.remainingAmount ?? 0),
+      }
+
+      setPaymongoCheckout(null)
+      setPaymongoVerificationMessage('')
+      setSelectedReceipt(finalizedPaymentRecord)
       setActiveModal('receipt')
-      if (flash) flash(`Payment of ₱ ${billToPay.totalAmount.toFixed(2)} completed via ${payMethod}! Official Receipt: ${orNumber}`)
-    }, 800)
+      if (flash) flash(
+        Number(paymentResult.remainingAmount) > 0
+          ? `₱${Number(paymentResult.amountPaid).toFixed(2)} credited. ₱${Number(paymentResult.remainingAmount).toFixed(2)} remains due. Receipt ${finalizedPaymentRecord.orNumber} issued.`
+          : `Payment verified! Official Receipt ${finalizedPaymentRecord.orNumber} issued.`
+      )
+    } catch (err) {
+      setPaymongoVerificationMessage(err.message || 'Payment confirmation failed. Please try again.')
+      if (flash) flash('Could not verify payment: ' + err.message)
+    } finally {
+      paymongoVerificationInProgressRef.current = false
+      setIsPaying(false)
+    }
   }
 
   // Submit Complaint / Service Ticket (Aligned with Field Staff Service Desk)
@@ -292,7 +566,7 @@ export default function ConsumerPortal({
                   onClick={handleCopyAccount}
                   title="Copy Account Number"
                 >
-                  {copiedAccount ? '✓' : '📋'}
+                  {copiedAccount ? <Check size={12} /> : <Copy size={12} />}
                 </button>
               </div>
             </div>
@@ -304,15 +578,15 @@ export default function ConsumerPortal({
               onClick={() => setActiveModal('notice')}
               title="District Notifications"
             >
-              🔔
+              <Bell size={18} />
               <span className="cp-bell-dot" />
             </button>
             <button
               className="cp-btn-icon"
-              onClick={onSignOut}
+              onClick={() => setShowSignOutConfirm(true)}
               title="Sign Out"
             >
-              ↪
+              <LogOut size={18} />
             </button>
           </div>
         </header>
@@ -335,14 +609,15 @@ export default function ConsumerPortal({
                       onClick={() => setHideBalance(!hideBalance)}
                       title="Toggle Amount Privacy"
                     >
-                      {hideBalance ? '🙈' : '👁️'}
+                      {hideBalance ? <EyeOff size={14} /> : <Eye size={14} />}
                     </button>
                   </span>
                   <button
                     className="cp-balance-history-btn"
                     onClick={() => setActiveTab('bills')}
                   >
-                    Details ›
+                    <span>Details</span>
+                    <ChevronRight size={13} />
                   </button>
                 </div>
 
@@ -351,7 +626,7 @@ export default function ConsumerPortal({
                   <span className="cp-balance-amount">
                     {hideBalance
                       ? '••••••'
-                      : (unpaidBill ? unpaidBill.totalAmount.toLocaleString('en-US', { minimumFractionDigits: 2 }) : '0.00')}
+                      : (unpaidBill ? unpaidAmount.toLocaleString('en-US', { minimumFractionDigits: 2 }) : '0.00')}
                   </span>
                 </div>
 
@@ -359,13 +634,13 @@ export default function ConsumerPortal({
                   <button
                     className="cp-btn-topup"
                     onClick={() => setActiveModal('pay')}
-                    disabled={!unpaidBill}
+                    disabled={!unpaidBill && !paymongoCheckout}
                   >
-                    <span>💳</span> Pay Statement
+                    <CreditCard size={15} /> {paymongoCheckout && !unpaidBill ? 'Resume Checkout' : 'Pay Statement'}
                   </button>
 
                   <div className="cp-badge-due">
-                    <span>💧</span>
+                    <Droplets size={14} />
                     <span>
                       {hasCurrentStatement ? `${latestBill.consumption ?? 0} m³ · ${activeConsumer.zone}` : 'No statement yet · 0 m³'}
                     </span>
@@ -375,43 +650,43 @@ export default function ConsumerPortal({
 
               {/* Quick Action Grid (8 Colorful Action Buttons) */}
               <section className="cp-action-grid">
-                <button className="cp-action-btn" onClick={() => setActiveModal('pay')} disabled={!unpaidBill}>
-                  <div className="cp-icon-circle bg-soft-blue">💳</div>
-                  <span className="cp-action-label">Pay Bill</span>
+                <button className="cp-action-btn" onClick={() => setActiveModal('pay')} disabled={!unpaidBill && !paymongoCheckout}>
+                  <div className="cp-icon-circle bg-soft-blue"><CreditCard size={22} strokeWidth={2.2} /></div>
+                  <span className="cp-action-label">{paymongoCheckout && !unpaidBill ? 'Resume Checkout' : 'Pay Bill'}</span>
                 </button>
 
                 <button className="cp-action-btn" onClick={() => setActiveTab('bills')}>
-                  <div className="cp-icon-circle bg-soft-cyan">📄</div>
+                  <div className="cp-icon-circle bg-soft-cyan"><FileText size={22} strokeWidth={2.2} /></div>
                   <span className="cp-action-label">Statement</span>
                 </button>
 
                 <button className="cp-action-btn" onClick={() => setActiveTab('history')}>
-                  <div className="cp-icon-circle bg-soft-orange">🧾</div>
+                  <div className="cp-icon-circle bg-soft-orange"><Receipt size={22} strokeWidth={2.2} /></div>
                   <span className="cp-action-label">Receipts</span>
                 </button>
 
                 <button className="cp-action-btn" onClick={() => setActiveTab('usage')}>
-                  <div className="cp-icon-circle bg-soft-emerald">📊</div>
+                  <div className="cp-icon-circle bg-soft-emerald"><BarChart3 size={22} strokeWidth={2.2} /></div>
                   <span className="cp-action-label">Usage</span>
                 </button>
 
                 <button className="cp-action-btn" onClick={() => setActiveModal('meter')}>
-                  <div className="cp-icon-circle bg-soft-amber">💧</div>
+                  <div className="cp-icon-circle bg-soft-amber"><Droplets size={22} strokeWidth={2.2} /></div>
                   <span className="cp-action-label">Cubic Meter</span>
                 </button>
 
                 <button className="cp-action-btn" onClick={() => setActiveModal('ticket')}>
-                  <div className="cp-icon-circle bg-soft-purple">🛠️</div>
+                  <div className="cp-icon-circle bg-soft-purple"><Wrench size={22} strokeWidth={2.2} /></div>
                   <span className="cp-action-label">Report Problem</span>
                 </button>
 
                 <button className="cp-action-btn" onClick={() => setActiveModal('dossier')}>
-                  <div className="cp-icon-circle bg-soft-slate">👤</div>
+                  <div className="cp-icon-circle bg-soft-slate"><User size={22} strokeWidth={2.2} /></div>
                   <span className="cp-action-label">Profile</span>
                 </button>
 
                 <button className="cp-action-btn" onClick={() => setActiveModal('notice')}>
-                  <div className="cp-icon-circle bg-soft-rose">🔔</div>
+                  <div className="cp-icon-circle bg-soft-rose"><Bell size={22} strokeWidth={2.2} /></div>
                   <span className="cp-action-label">Alerts</span>
                 </button>
               </section>
@@ -522,7 +797,7 @@ export default function ConsumerPortal({
                   ) : !isNewConsumer ? (
                     <div className="cp-tx-item">
                       <div className="cp-tx-left">
-                        <div className="cp-tx-icon-circle tx-out">↑</div>
+                        <div className="cp-tx-icon-circle tx-out"><ArrowUpRight size={14} /></div>
                         <div className="cp-tx-details">
                           <span className="cp-tx-name">Counter POS Payment</span>
                           <span className="cp-tx-time">02 Sep 2026 14:28 · Cash</span>
@@ -539,7 +814,7 @@ export default function ConsumerPortal({
                   {!isNewConsumer && (
                   <div className="cp-tx-item">
                     <div className="cp-tx-left">
-                      <div className="cp-tx-icon-circle tx-in">💧</div>
+                      <div className="cp-tx-icon-circle tx-in"><Droplets size={14} /></div>
                       <div className="cp-tx-details">
                         <span className="cp-tx-name">Field Verified Reading</span>
                         <span className="cp-tx-time">31 Aug 2026 · Field Tech Team</span>
@@ -558,7 +833,7 @@ export default function ConsumerPortal({
                   {myComplaints.length > 0 && (
                     <div className="cp-tx-item">
                       <div className="cp-tx-left">
-                        <div className="cp-tx-icon-circle tx-service">🛠️</div>
+                        <div className="cp-tx-icon-circle tx-service"><Wrench size={14} /></div>
                         <div className="cp-tx-details">
                           <span className="cp-tx-name">{myComplaints[0].issueType}</span>
                           <span className="cp-tx-time">{myComplaints[0].reportedAt || '03 Sep 2026'}</span>
@@ -598,19 +873,27 @@ export default function ConsumerPortal({
           {/* TAB: STATEMENTS / BILLS */}
           {activeTab === 'bills' && (
             <div className="space-y-4">
-              <div className="bg-white rounded-2xl p-5 shadow-sm border border-slate-100">
+              {unpaidBill ? (
+                <div className="bg-white rounded-2xl p-5 shadow-sm border border-slate-100">
                 <div className="flex justify-between items-center pb-3 border-b border-slate-100">
                   <h3 className="font-bold text-slate-800 text-sm">Active Statement</h3>
                   <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${unpaidBill ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'}`}>
-                    {unpaidBill ? 'Payment Due' : 'Fully Settled'}
+                    {unpaidBill && unpaidAmount < Number(unpaidBill.totalAmount)
+                      ? 'Partially Paid'
+                      : unpaidBill ? 'Payment Due' : 'Fully Settled'}
                   </span>
                 </div>
 
                 <div className="my-4 text-center">
                   <span className="text-xs text-slate-400 font-medium block">Total Payable</span>
                   <strong className="text-3xl font-extrabold text-slate-900 block mt-1">
-                    ₱ {Number(latestBill.totalAmount).toFixed(2)}
+                    ₱ {Number(unpaidBill ? unpaidAmount : latestBill.totalAmount).toFixed(2)}
                   </strong>
+                  {unpaidBill && unpaidAmount < Number(unpaidBill.totalAmount) && (
+                    <span className="text-xs text-slate-500 block mt-1">
+                      ₱{Number(unpaidBill.totalAmount).toFixed(2)} bill · ₱{(Number(unpaidBill.totalAmount) - unpaidAmount).toFixed(2)} paid
+                    </span>
+                  )}
                   <span className="text-xs text-slate-500 mt-1 block">
                     Due Date: <strong>{latestBill.dueDate || 'Calculated at month-end'}</strong>
                   </span>
@@ -635,16 +918,50 @@ export default function ConsumerPortal({
                       <span>₱ {Number(latestBill.arrears).toFixed(2)}</span>
                     </div>
                   )}
+                  {Number(latestBill.penalty || 0) > 0 && (
+                    <div className="flex justify-between text-amber-600 font-semibold">
+                      <span>Late Penalty (10%)</span>
+                      <span>₱ {Number(latestBill.penalty).toFixed(2)}</span>
+                    </div>
+                  )}
                 </div>
+
+                {hasArrearsOrPenalty && unpaidBill && (
+                  <div className="mt-3 p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800 flex items-start gap-2">
+                    <AlertCircle size={16} className="text-amber-600 shrink-0 mt-0.5" />
+                    <div>
+                      <strong className="block font-bold">Over-The-Counter Payment Notice</strong>
+                      <span>This bill includes arrears or penalties. Online GCash settlement is unavailable; please settle over the counter at the cashier.</span>
+                    </div>
+                  </div>
+                )}
 
                 <button
                   className="cp-btn-primary w-full mt-4"
                   onClick={() => setActiveModal('pay')}
-                  disabled={!unpaidBill}
+                  disabled={!unpaidBill && !paymongoCheckout}
                 >
-                  {unpaidBill ? 'Proceed to Payment Gateway →' : 'No Payment Due Yet'}
+                  {unpaidBill
+                    ? (hasArrearsOrPenalty ? 'View Settlement Notice (Over the Counter) →' : 'Proceed to GCash Payment →')
+                    : paymongoCheckout
+                    ? 'Resume PayMongo Checkout →'
+                    : 'No Payment Due Yet'}
                 </button>
-              </div>
+                </div>
+              ) : (
+                <div
+                  role="status"
+                  className="bg-white rounded-2xl p-5 shadow-sm border border-slate-100 text-center"
+                >
+                  <div className="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-full bg-emerald-50 text-emerald-600">
+                    <Check size={22} aria-hidden="true" />
+                  </div>
+                  <h3 className="font-bold text-slate-800 text-sm">No water statement due</h3>
+                  <p className="mt-2 text-xs leading-relaxed text-slate-500">
+                    Your previous statement is settled. A new statement will appear here when it is issued, and you can pay it from this page.
+                  </p>
+                </div>
+              )}
 
               {/* Statement History */}
               <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-100">
@@ -659,7 +976,11 @@ export default function ConsumerPortal({
                       <div className="text-right">
                         <strong className="text-slate-800 block">₱ {Number(b.totalAmount).toFixed(2)}</strong>
                         <span className={`text-[10px] font-bold ${b.status === 'Paid' ? 'text-emerald-600' : 'text-amber-600'}`}>
-                          {b.status}
+                          {b.status === 'Paid'
+                            ? 'Paid'
+                            : getBillBalance(b) < Number(b.totalAmount)
+                            ? `Partially paid · ₱${getBillBalance(b).toFixed(2)} due`
+                            : b.status}
                         </span>
                       </div>
                     </div>
@@ -768,7 +1089,11 @@ export default function ConsumerPortal({
                       <div className="text-right">
                         <strong className="text-xs font-bold text-slate-800 block">₱ {Number(b.totalAmount).toFixed(2)}</strong>
                         <span className={`text-[10px] font-bold ${b.status === 'Paid' ? 'text-emerald-600' : 'text-amber-600'}`}>
-                          {b.status === 'Paid' ? 'Paid' : 'Unpaid'}
+                          {b.status === 'Paid'
+                            ? 'Paid'
+                            : getBillBalance(b) < Number(b.totalAmount)
+                            ? `Partially paid · ₱${getBillBalance(b).toFixed(2)} due`
+                            : 'Unpaid'}
                         </span>
                       </div>
                     </div>
@@ -806,7 +1131,7 @@ export default function ConsumerPortal({
                     <span className="font-medium text-slate-800">{activeConsumer.connectionDate}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-slate-400">Tariff Classification</span>
+                    <span className="text-slate-400">Account Classification</span>
                     <span className="font-medium text-slate-800">{activeConsumer.classification}</span>
                   </div>
                   <div className="flex justify-between">
@@ -816,10 +1141,18 @@ export default function ConsumerPortal({
                 </div>
 
                 <button
-                  className="w-full mt-5 py-2.5 bg-rose-50 text-rose-600 rounded-xl font-bold text-xs hover:bg-rose-100 transition"
-                  onClick={onSignOut}
+                  type="button"
+                  className="w-full mt-4 py-2.5 bg-sky-50 text-sky-700 rounded-xl font-bold text-xs hover:bg-sky-100 transition flex items-center justify-center gap-1.5 border border-sky-100"
+                  onClick={() => setActiveModal('dossier')}
                 >
-                  ↪ Sign Out of Consumer Portal
+                  <span>✏️</span> Edit Profile & Contact Number
+                </button>
+
+                <button
+                  className="w-full mt-2.5 py-2.5 bg-rose-50 text-rose-600 rounded-xl font-bold text-xs hover:bg-rose-100 transition"
+                  onClick={() => setShowSignOutConfirm(true)}
+                >
+                  Sign Out of Consumer Portal
                 </button>
               </div>
             </div>
@@ -833,7 +1166,7 @@ export default function ConsumerPortal({
             className={`cp-nav-item ${activeTab === 'home' ? 'active' : ''}`}
             onClick={() => setActiveTab('home')}
           >
-            <span className="cp-nav-icon">🏠</span>
+            <span className="cp-nav-icon"><Home size={20} strokeWidth={activeTab === 'home' ? 2.5 : 2} /></span>
             <span>Home</span>
           </button>
 
@@ -841,7 +1174,7 @@ export default function ConsumerPortal({
             className={`cp-nav-item ${activeTab === 'bills' ? 'active' : ''}`}
             onClick={() => setActiveTab('bills')}
           >
-            <span className="cp-nav-icon">📄</span>
+            <span className="cp-nav-icon"><FileText size={20} strokeWidth={activeTab === 'bills' ? 2.5 : 2} /></span>
             <span>Bills</span>
           </button>
 
@@ -851,14 +1184,14 @@ export default function ConsumerPortal({
             onClick={() => setActiveModal('pay')}
             title="Instant Settlement"
           >
-            💧
+            <Droplets size={22} strokeWidth={2.5} />
           </button>
 
           <button
             className={`cp-nav-item ${activeTab === 'usage' ? 'active' : ''}`}
             onClick={() => setActiveTab('usage')}
           >
-            <span className="cp-nav-icon">📊</span>
+            <span className="cp-nav-icon"><BarChart3 size={20} strokeWidth={activeTab === 'usage' ? 2.5 : 2} /></span>
             <span>Analytics</span>
           </button>
 
@@ -866,7 +1199,7 @@ export default function ConsumerPortal({
             className="cp-nav-item"
             onClick={() => setActiveModal('dossier')}
           >
-            <span className="cp-nav-icon">👤</span>
+            <span className="cp-nav-icon"><User size={20} strokeWidth={2} /></span>
             <span>Profile</span>
           </button>
         </nav>
@@ -940,6 +1273,20 @@ export default function ConsumerPortal({
                   />
                 </div>
                 <div className="cp-input-group">
+                  <label className="cp-input-label" htmlFor="profile-contact">Mobile Contact / GCash Number</label>
+                  <input
+                    id="profile-contact"
+                    className="cp-input"
+                    type="tel"
+                    value={profileContact}
+                    onChange={(event) => setProfileContact(event.target.value)}
+                    placeholder="0912 345 6789"
+                  />
+                  <small style={{ fontSize: '11px', color: '#64748b', marginTop: '2px', display: 'block' }}>
+                    Used for PayMongo / GCash receipt & billing communications
+                  </small>
+                </div>
+                <div className="cp-input-group">
                   <label className="cp-input-label" htmlFor="profile-password">New Password</label>
                   <input
                     id="profile-password"
@@ -967,16 +1314,16 @@ export default function ConsumerPortal({
                 </button>
               </form>
 
-              <button className="w-full py-2.5 bg-rose-50 text-rose-600 rounded-xl font-bold text-xs hover:bg-rose-100 transition" onClick={onSignOut}>
-                ↪ Sign Out of Consumer Portal
+              <button className="w-full py-2.5 bg-rose-50 text-rose-600 rounded-xl font-bold text-xs hover:bg-rose-100 transition" onClick={() => setShowSignOutConfirm(true)}>
+                Sign Out of Consumer Portal
               </button>
             </div>
           </div>
         )}
 
         {/* ─── MODAL: PAYMENT SHEET ─── */}
-        {activeModal === 'pay' && (
-          <div className="cp-modal-backdrop cp-modal-centered" onClick={() => setActiveModal(null)}>
+        {activeModal === 'pay' && createPortal(
+          <div className="cp-modal-backdrop cp-modal-centered cp-payment-modal" onClick={() => setActiveModal(null)}>
             <div className="cp-modal-sheet" onClick={(e) => e.stopPropagation()}>
               <div className="cp-sheet-handle" />
               <div className="cp-sheet-header">
@@ -989,40 +1336,270 @@ export default function ConsumerPortal({
               <div className="bg-sky-50 rounded-2xl p-4 text-center border border-sky-100">
                 <span className="text-xs text-sky-700 block font-medium">Payable Amount</span>
                 <strong className="text-3xl font-extrabold text-sky-950 block mt-1">
-                  ₱ {Number(latestBill.totalAmount).toFixed(2)}
+                  ₱ {Number(paymongoCheckout?.amount ?? (unpaidBill ? unpaidAmount : 0)).toFixed(2)}
                 </strong>
                 <span className="text-[11px] text-slate-500 mt-1 block">
                   {activeConsumer.name} · {activeConsumer.accountNo}
                 </span>
               </div>
 
+              {isBelowPaymongoMinimum && !hasArrearsOrPenalty && (
+                <div
+                  role="status"
+                  style={{
+                    background: '#fffbeb',
+                    border: '1.5px solid #f59e0b',
+                    borderRadius: '12px',
+                    padding: '12px 14px',
+                    color: '#92400e',
+                    fontSize: '12px',
+                    lineHeight: 1.5,
+                  }}
+                >
+                  PayMongo checkout requires at least ₱20.00. Your remaining balance is ₱{Number(unpaidAmount).toFixed(2)}; please pay this exact amount at the cashier.
+                </div>
+              )}
+
               <div className="space-y-2">
-                <span className="text-xs font-bold text-slate-700 block">Select Digital Payment Channel</span>
-                <div className="cp-pay-methods-grid">
-                  {['GCash', 'Maya', 'Bank Transfer'].map((m) => (
-                    <button
-                      key={m}
-                      className={`cp-method-btn ${payMethod === m ? 'selected' : ''}`}
-                      onClick={() => setPayMethod(m)}
-                    >
-                      <span className="text-xl">
-                        {m === 'GCash' ? '📱' : m === 'Maya' ? '💳' : '🏦'}
+                <span className="text-xs font-bold text-slate-700 block">Digital Payment Channel</span>
+
+                {hasArrearsOrPenalty ? (
+                  <div
+                    role="status"
+                    aria-live="polite"
+                    style={{
+                      background: '#fffbeb',
+                      border: '1.5px solid #f59e0b',
+                      borderRadius: '16px',
+                      padding: '14px 16px',
+                      marginBottom: '10px',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '8px',
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#b45309' }}>
+                      <AlertCircle size={20} strokeWidth={2.5} style={{ flexShrink: 0 }} />
+                      <strong style={{ fontSize: '13px', fontWeight: 800 }}>
+                        Over-The-Counter Settlement Required
+                      </strong>
+                    </div>
+                    <p style={{ fontSize: '12px', color: '#92400e', margin: 0, lineHeight: '1.4' }}>
+                      This account has <strong>{Number(latestBill.arrears || 0) > 0 ? `arrears (₱ ${Number(latestBill.arrears).toFixed(2)})` : ''}{Number(latestBill.arrears || 0) > 0 && Number(latestBill.penalty || 0) > 0 ? ' & ' : ''}{Number(latestBill.penalty || 0) > 0 ? `penalties (₱ ${Number(latestBill.penalty).toFixed(2)})` : (latestBill.status === 'Overdue' && Number(latestBill.arrears || 0) <= 0 ? 'overdue status' : '')}</strong>. Online GCash settlement is unavailable for overdue accounts.
+                    </p>
+                    <div style={{ fontSize: '11px', color: '#78350f', background: 'rgba(245, 158, 11, 0.15)', padding: '6px 10px', borderRadius: '8px' }}>
+                      🏢 Please visit the <strong>Lambawasa Municipal Water Office (Cashier Counter 1-3)</strong> to settle your balance in person.
+                    </div>
+                  </div>
+                ) : null}
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  {/* PayMongo Unified Gateway Option */}
+                  <div
+                    style={{
+                      width: '100%',
+                      padding: '16px',
+                      borderRadius: '18px',
+                      background: hasArrearsOrPenalty ? '#f1f5f9' : '#f0f9ff',
+                      border: hasArrearsOrPenalty ? '1.5px dashed #cbd5e1' : '2px solid #0284c7',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '10px',
+                      boxShadow: '0 2px 10px rgba(2, 132, 199, 0.08)',
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span style={{ fontSize: '20px' }}>⚡</span>
+                        <div>
+                          <strong style={{ fontSize: '15px', color: '#0369a1', display: 'block' }}>
+                            PayMongo Payment Gateway
+                          </strong>
+                          <span style={{ fontSize: '11px', color: '#64748b' }}>
+                            Official BSP-regulated secure checkout
+                          </span>
+                        </div>
+                      </div>
+                      <span style={{ fontSize: '11px', fontWeight: 700, background: '#e0f2fe', color: '#0284c7', padding: '3px 8px', borderRadius: '12px' }}>
+                        {paymongoConfig === null
+                          ? 'Checking…'
+                          : paymongoConfig.configured
+                          ? paymongoConfig.mode === 'test' ? 'Test Mode' : 'Live Mode'
+                          : 'Unavailable'}
                       </span>
-                      <span>{m}</span>
-                    </button>
-                  ))}
+                    </div>
+
+                    {paymongoConfig && !paymongoConfig.configured && (
+                      <p role="alert" style={{ margin: 0, fontSize: '12px', color: '#9a3412', background: '#fff7ed', border: '1px solid #fed7aa', borderRadius: '10px', padding: '10px' }}>
+                        Online checkout is temporarily unavailable. {paymongoConfig.error || 'The server needs a PayMongo key configured.'} Your statement remains unpaid; please try again later or pay at the cashier.
+                      </p>
+                    )}
+                    {paymongoConfig?.configured && paymongoConfig.mode === 'test' && (
+                      <p role="status" style={{ margin: 0, fontSize: '12px', color: '#854d0e', background: '#fefce8', border: '1px solid #fde68a', borderRadius: '10px', padding: '10px' }}>
+                        Test mode only: transactions are simulated and do not move real money or create payouts.
+                      </p>
+                    )}
+
+                    {/* Supported channels tags */}
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '2px' }}>
+                      <span style={{ fontSize: '11px', background: '#005ce6', color: '#fff', padding: '3px 8px', borderRadius: '6px', fontWeight: 700 }}>
+                        GCash
+                      </span>
+                      <span style={{ fontSize: '11px', background: '#10b981', color: '#fff', padding: '3px 8px', borderRadius: '6px', fontWeight: 700 }}>
+                        Maya
+                      </span>
+                      <span style={{ fontSize: '11px', background: '#059669', color: '#fff', padding: '3px 8px', borderRadius: '6px', fontWeight: 700 }}>
+                        GrabPay
+                      </span>
+                      <span style={{ fontSize: '11px', background: '#3b82f6', color: '#fff', padding: '3px 8px', borderRadius: '6px', fontWeight: 700 }}>
+                        Visa / Mastercard
+                      </span>
+                    </div>
+
+                    {/* Contact Number Input for GCash / PayMongo */}
+                    <div style={{ marginTop: '8px', paddingTop: '10px', borderTop: '1px solid #e2e8f0' }}>
+                      <label
+                        htmlFor="pay-contact-input"
+                        style={{
+                          fontSize: '11px',
+                          fontWeight: 700,
+                          color: '#0369a1',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          marginBottom: '4px',
+                        }}
+                      >
+                        <span>📱 GCash / Mobile Contact Number</span>
+                        <span style={{ fontSize: '10px', color: '#64748b', fontWeight: 'normal' }}>Editable</span>
+                      </label>
+                      <input
+                        id="pay-contact-input"
+                        type="tel"
+                        value={payContact}
+                        onChange={(e) => setPayContact(e.target.value)}
+                        placeholder="e.g. 0917 123 4567"
+                        style={{
+                          width: '100%',
+                          padding: '8px 12px',
+                          borderRadius: '10px',
+                          border: '1.5px solid #bae6fd',
+                          background: '#ffffff',
+                          fontSize: '13px',
+                          color: '#0f172a',
+                          fontWeight: 600,
+                          outline: 'none',
+                          boxSizing: 'border-box',
+                        }}
+                      />
+                      <small style={{ fontSize: '10.5px', color: '#64748b', marginTop: '3px', display: 'block' }}>
+                        This contact number will be attached to your GCash / PayMongo checkout receipt.
+                      </small>
+                    </div>
+                  </div>
+
+                  {/* If checkout session is active */}
+                  {paymongoCheckoutUrl && (
+                    <div
+                      role="status"
+                      aria-live="polite"
+                      style={{
+                        background: '#ecfdf5',
+                        border: '1.5px solid #10b981',
+                        borderRadius: '16px',
+                        padding: '14px',
+                        textAlign: 'center',
+                      }}
+                    >
+                      <span style={{ fontSize: '13px', color: '#065f46', fontWeight: 700, display: 'block' }}>
+                        PayMongo Checkout Session Ready
+                      </span>
+                      <span style={{ fontSize: '11px', color: '#047857', display: 'block', marginTop: '3px' }}>
+                        Bill {paymongoCheckout.billId} · ₱{Number(paymongoCheckout.amount).toFixed(2)}
+                      </span>
+                      {paymongoVerificationMessage && (
+                        <p role="status" aria-live="polite" style={{ fontSize: '12px', color: '#065f46', margin: '8px 0' }}>
+                          {paymongoVerificationMessage}
+                        </p>
+                      )}
+                      <p style={{ fontSize: '11px', color: '#047857', margin: '4px 0 10px' }}>
+                        Tap below if the checkout tab didn't open automatically, then click <strong>Verify & Complete</strong> once paid.
+                      </p>
+                      <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
+                        <a
+                          href={paymongoCheckoutUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="cp-btn-primary"
+                          style={{
+                            fontSize: '12px',
+                            padding: '8px 14px',
+                            background: '#0284c7',
+                            textDecoration: 'none',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                          }}
+                        >
+                          Open Checkout Page ↗
+                        </a>
+                        <button
+                          type="button"
+                          onClick={handleVerifyAndFinalizePayment}
+                          aria-busy={isPaying}
+                          className="cp-btn-primary"
+                          style={{
+                            fontSize: '12px',
+                            padding: '8px 14px',
+                            background: '#10b981',
+                          }}
+                        >
+                          {isPaying ? 'Verifying...' : '✓ Verify & Complete'}
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
 
-              <button
-                className="cp-btn-primary mt-2"
-                onClick={handlePaySubmit}
-                disabled={isPaying || !unpaidBill}
-              >
-                {isPaying ? 'Authorizing Gateway Transaction...' : unpaidBill ? `Pay ₱ ${Number(latestBill.totalAmount).toFixed(2)} via ${payMethod}` : 'No payable statement available'}
-              </button>
+              {!paymongoCheckoutUrl ? (
+                <button
+                  className="cp-btn-primary mt-2"
+                  onClick={handlePaySubmit}
+                  disabled={isPaying || !unpaidBill || hasArrearsOrPenalty || isBelowPaymongoMinimum || !paymongoConfig?.configured}
+                  style={{
+                    background: hasArrearsOrPenalty || isBelowPaymongoMinimum || !paymongoConfig?.configured ? '#94a3b8' : undefined,
+                    cursor: hasArrearsOrPenalty || isBelowPaymongoMinimum || !paymongoConfig?.configured ? 'not-allowed' : undefined,
+                  }}
+                >
+                  {hasArrearsOrPenalty
+                    ? 'Must Settle Over The Counter (Cashier)'
+                    : isBelowPaymongoMinimum
+                    ? 'Pay Exact Amount at the Cashier'
+                    : paymongoConfig && !paymongoConfig.configured
+                    ? 'Online Payment Unavailable'
+                    : paymongoConfig === null
+                    ? 'Checking PayMongo Gateway...'
+                    : isPaying
+                    ? 'Initializing PayMongo Gateway...'
+                    : unpaidBill
+                    ? `Proceed to Pay ₱ ${Number(unpaidAmount).toFixed(2)} via PayMongo`
+                    : 'No payable statement available'}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className="cp-btn-primary mt-2"
+                  onClick={handleVerifyAndFinalizePayment}
+                  aria-busy={isPaying}
+                  style={{ background: '#10b981' }}
+                >
+                  {isPaying ? 'Verifying PayMongo Payment...' : '✓ Confirm & Generate Official Receipt'}
+                </button>
+              )}
             </div>
-          </div>
+          </div>,
+          document.body
         )}
 
         {/* ─── MODAL: OFFICIAL RECEIPT ─── */}
@@ -1400,6 +1977,39 @@ export default function ConsumerPortal({
         )}
 
       </div>
+
+      {/* Sign Out Confirmation */}
+      {showSignOutConfirm && (
+        <div
+          className="cp-modal-backdrop cp-modal-centered"
+          onClick={() => setShowSignOutConfirm(false)}
+          style={{ zIndex: 99999 }}
+        >
+          <div className="cp-modal-sheet" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '320px', textAlign: 'center' }}>
+            <div className="cp-sheet-handle" />
+            <h3 className="cp-sheet-title" style={{ marginBottom: '8px' }}>Sign Out?</h3>
+            <p style={{ fontSize: '13px', color: '#64748b', marginBottom: '20px' }}>
+              You'll be returned to the login screen.
+            </p>
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <button
+                className="cp-btn-secondary"
+                style={{ flex: 1 }}
+                onClick={() => setShowSignOutConfirm(false)}
+              >
+                Cancel
+              </button>
+              <button
+                className="cp-btn-primary"
+                style={{ flex: 1, background: '#ef4444' }}
+                onClick={() => { setShowSignOutConfirm(false); onSignOut() }}
+              >
+                Yes, Sign Out
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

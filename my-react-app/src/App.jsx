@@ -14,7 +14,6 @@ import {
   initialAdjustments,
   initialRatings,
   calculateConsumptionBill,
-  initialTariff,
 } from './data/mockData'
 
 import OverviewDashboard from './components/OverviewDashboard'
@@ -141,21 +140,38 @@ function loadClusterBoundaries() {
   }))
 }
 
+import {
+  LayoutDashboard,
+  BarChart3,
+  Bell,
+  Users,
+  Gauge,
+  MapPin,
+  Calculator,
+  ReceiptText,
+  AlertTriangle,
+  CreditCard,
+  LifeBuoy,
+  History,
+  UserCheck,
+  LogOut
+} from 'lucide-react'
+
 // All system navigation items tagged with permitted FDD roles
 const allNavItems = [
-  { id: 'Overview', label: 'Overview', icon: '⌂', roles: ['President', 'Office Staffs', 'Administrator'] },
-  { id: 'Reports', label: 'Reports', icon: '📊', badge: 'FDD', roles: ['President', 'Office Staffs', 'Administrator'] },
-  { id: 'Notifications', label: 'Notifications', icon: '✉️', badge: 'Auto', roles: ['Office Staffs', 'Cashier', 'President', 'Administrator'] },
-  { id: 'Household Profiling', label: 'Consumers', icon: '♧', roles: ['Office Staffs', 'President', 'Administrator'] },
-  { id: 'Meter Assets', label: 'Meter Assets', icon: '▣', roles: ['Field Staffs', 'Office Staffs'] },
-  { id: 'Geographical Mapping', label: 'Geo Mapping', icon: '🗺️', roles: ['Field Staffs', 'President', 'Administrator'] },
-  { id: 'Consumption Calculator', label: 'Calculator', icon: '🧮', roles: ['Field Staffs', 'Cashier', 'Administrator'] },
-  { id: 'Batch Billing', label: 'Batch Billing', icon: '▤', badge: 'Run', roles: ['Office Staffs', 'Cashier', 'President', 'Administrator'] },
-  { id: 'Arrears & Penalties', label: 'Arrears & Penalties', icon: '⚠️', badge: 'Alert', roles: ['Office Staffs', 'Cashier', 'President', 'Administrator'] },
-  { id: 'Payment P.O.S.', label: 'Payment P.O.S.', icon: '₱', roles: ['Cashier', 'President', 'Administrator'] },
-  { id: 'Service Desk', label: 'Report Problem', icon: '◇', roles: ['Field Staffs', 'Office Staffs', 'Administrator'] },
-  { id: 'Operational Audit Trail', label: 'Audit Trail', icon: '◌', roles: ['President', 'Administrator'] },
-  { id: 'Staff Management', label: 'Staff Management', icon: '👥', roles: ['President', 'Administrator'] },
+  { id: 'Overview', label: 'Overview', icon: LayoutDashboard, roles: ['President', 'Office Staffs', 'Administrator'] },
+  { id: 'Reports', label: 'Reports', icon: BarChart3, badge: 'FDD', roles: ['President', 'Office Staffs', 'Administrator'] },
+  { id: 'Notifications', label: 'Notifications', icon: Bell, badge: 'Auto', roles: ['Office Staffs', 'Cashier', 'President', 'Administrator'] },
+  { id: 'Household Profiling', label: 'Consumers', icon: Users, roles: ['Office Staffs', 'President', 'Administrator'] },
+  { id: 'Meter Assets', label: 'Meter Assets', icon: Gauge, roles: ['Field Staffs', 'Office Staffs', 'President', 'Administrator'] },
+  { id: 'Geographical Mapping', label: 'Geo Mapping', icon: MapPin, roles: ['Field Staffs', 'President', 'Administrator'] },
+  { id: 'Consumption Calculator', label: 'Cubic Meter Calculator', icon: Calculator, badge: 'Cubic m³', roles: ['President', 'Field Staffs', 'Cashier', 'Administrator'] },
+  { id: 'Batch Billing', label: 'Batch Billing', icon: ReceiptText, badge: 'Run', roles: ['Office Staffs', 'Cashier', 'President', 'Administrator'] },
+  { id: 'Arrears & Penalties', label: 'Arrears & Penalties', icon: AlertTriangle, badge: 'Alert', roles: ['Office Staffs', 'Cashier', 'President', 'Administrator'] },
+  { id: 'Payment P.O.S.', label: 'Payment P.O.S.', icon: CreditCard, roles: ['Cashier', 'President', 'Administrator'] },
+  { id: 'Service Desk', label: 'Report Problem', icon: LifeBuoy, roles: ['Field Staffs', 'Office Staffs', 'Administrator'] },
+  { id: 'Operational Audit Trail', label: 'Audit Trail', icon: History, roles: ['President', 'Administrator'] },
+  { id: 'Staff Management', label: 'Staff Management', icon: UserCheck, roles: ['President', 'Administrator'] },
 ]
 
 
@@ -185,12 +201,21 @@ function App() {
     || import.meta.env.MODE === 'staff'
 
   // Public Landing Page & Persistent Authentication State
-  const [isLoggedIn, setIsLoggedIn] = useState(() => loadFromStorage('lambawasa_isLoggedIn', false))
+  // Use sessionStorage for auth — so each browser tab starts with a fresh login.
+  // This prevents one user's session bleeding into another user's tab on a shared device.
+  const [isLoggedIn, setIsLoggedIn] = useState(() => {
+    try { return JSON.parse(sessionStorage.getItem('lambawasa_isLoggedIn') || 'false') } catch { return false }
+  })
   const [showLoginModal, setShowLoginModal] = useState(false)
   const [loginModalMode, setLoginModalMode] = useState('consumer')
   const [showRegistrationModal, setShowRegistrationModal] = useState(false)
   const [registeredUsers, setRegisteredUsers] = useState(() => loadFromStorage('lambawasa_registeredUsers', []))
-  const [currentUser, setCurrentUser] = useState(loadCurrentUser)
+  const [currentUser, setCurrentUser] = useState(() => {
+    try {
+      const saved = JSON.parse(sessionStorage.getItem('lambawasa_currentUser') || 'null')
+      return saved && typeof saved === 'object' ? saved : DEFAULT_CURRENT_USER
+    } catch { return DEFAULT_CURRENT_USER }
+  })
 
   // Persistent Global Application & Active Navigation State
   const [activeNav, setActiveNav] = useState(() => loadFromStorage('lambawasa_activeNav', 'Overview'))
@@ -210,12 +235,15 @@ function App() {
   })
   const [adjustments, setAdjustments] = useState(() => loadFromStorage('lambawasa_adjustments', initialAdjustments))
   const [ratings, setRatings] = useState(() => loadFromStorage('lambawasa_ratings', initialRatings))
-  const [pendingMeterReadings, setPendingMeterReadings] = useState(() => loadFromStorage('lambawasa_pendingMeterReadings', []))
+  const [pendingMeterReadings, setPendingMeterReadings] = useState([])
   const [fieldTrackedTicketId, setFieldTrackedTicketId] = useState(null)
 
   // Browser storage is the offline fallback when the PHP/MySQL service is unavailable.
+  // Auth state uses sessionStorage — clears on tab close, preventing session bleed between users.
   useEffect(() => {
-    localStorage.setItem('lambawasa_isLoggedIn', JSON.stringify(isLoggedIn))
+    sessionStorage.setItem('lambawasa_isLoggedIn', JSON.stringify(isLoggedIn))
+    // Also clear from localStorage so old sessions don't linger
+    localStorage.removeItem('lambawasa_isLoggedIn')
   }, [isLoggedIn])
 
   useEffect(() => {
@@ -223,7 +251,8 @@ function App() {
   }, [activeNav])
 
   useEffect(() => {
-    localStorage.setItem('lambawasa_currentUser', JSON.stringify(currentUser))
+    sessionStorage.setItem('lambawasa_currentUser', JSON.stringify(currentUser))
+    localStorage.removeItem('lambawasa_currentUser')
   }, [currentUser])
 
   useEffect(() => {
@@ -331,27 +360,48 @@ function App() {
     localStorage.setItem('lambawasa_registeredUsers', JSON.stringify(registeredUsers))
   }, [registeredUsers])
 
+  // Automated System Rule: Every unpaid account that passes the 25th of the month is flagged as Overdue with 10% penalty
   useEffect(() => {
-    localStorage.setItem('lambawasa_pendingMeterReadings', JSON.stringify(pendingMeterReadings))
-  }, [pendingMeterReadings])
+    let needsUpdate = false
+    const updatedBills = bills.map((bill) => {
+      if (bill.status === 'Paid') return bill
 
-  useEffect(() => {
-    const hasEligiblePenalty = bills.some((bill) => (
-      bill.status === 'Overdue'
-      && (bill.daysOverdue || 0) >= 3
-      && Number(bill.penalty || 0) === 0
-    ))
-    if (!hasEligiblePenalty) return
-
-    setBills((previous) => previous.map((bill) => {
-      if (bill.status !== 'Overdue' || (bill.daysOverdue || 0) < 3 || Number(bill.penalty || 0) > 0) return bill
-      const penalty = +((Number(bill.baseAmount || 0) + Number(bill.arrears || 0)) * 0.1).toFixed(2)
-      return {
-        ...bill,
-        penalty,
-        totalAmount: +(Number(bill.baseAmount || 0) + Number(bill.arrears || 0) + penalty + Number(bill.envFee || 0) + Number(bill.maintFee || 0)).toFixed(2),
+      // Check if due date is beyond the 25th of the month
+      let isPast25th = false
+      let daysPast = 0
+      if (bill.dueDate) {
+        const parts = bill.dueDate.split('-')
+        const day = parts.length === 3 ? parseInt(parts[2], 10) : 20
+        if (day > 25) {
+          isPast25th = true
+          daysPast = day - 25
+        }
       }
-    }))
+
+      // Check if bill needs to be flagged as Overdue or needs automatic 10% penalty
+      const shouldBeOverdue = isPast25th || bill.status === 'Overdue' || (bill.daysOverdue || 0) > 0
+      const statutoryPenalty = +((Number(bill.baseAmount || 0) + Number(bill.arrears || 0)) * 0.1).toFixed(2)
+      const expectedPenalty = shouldBeOverdue ? Math.max(statutoryPenalty, Number(bill.penalty || 0)) : Number(bill.penalty || 0)
+
+      if (
+        (shouldBeOverdue && bill.status !== 'Overdue') ||
+        (shouldBeOverdue && Number(bill.penalty || 0) === 0)
+      ) {
+        needsUpdate = true
+        return {
+          ...bill,
+          status: 'Overdue',
+          daysOverdue: Math.max(bill.daysOverdue || 0, daysPast, 1),
+          penalty: expectedPenalty,
+          totalAmount: +(Number(bill.baseAmount || 0) + Number(bill.arrears || 0) + expectedPenalty + Number(bill.envFee || 0) + Number(bill.maintFee || 0)).toFixed(2),
+        }
+      }
+      return bill
+    })
+
+    if (needsUpdate) {
+      setBills(updatedBills)
+    }
   }, [bills])
 
 
@@ -375,6 +425,11 @@ function App() {
           if (Array.isArray(sysData.meters)) setMeters(sysData.meters)
           if (Array.isArray(sysData.geoPins)) setGeoPins(sysData.geoPins)
           if (Array.isArray(sysData.bills)) setBills(sysData.bills)
+          if (Array.isArray(sysData.meterReadings)) {
+            setPendingMeterReadings(sysData.meterReadings.filter(
+              (reading) => reading.status === 'Pending Office Confirmation'
+            ))
+          }
           if (Array.isArray(sysData.payments)) setPayments(sysData.payments)
           if (Array.isArray(sysData.complaints)) {
             // Merge: prefer DB resolutionImage, fall back to in-memory state image,
@@ -433,6 +488,14 @@ function App() {
   const [globalNavSearch, setGlobalNavSearch] = useState('')
   const [notice, setNotice] = useState('')
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const [showSignOutConfirm, setShowSignOutConfirm] = useState(false)
+
+  const confirmSignOut = () => setShowSignOutConfirm(true)
+  const doSignOut = (msg = 'Successfully signed out.') => {
+    setShowSignOutConfirm(false)
+    setIsLoggedIn(false)
+    flash(msg)
+  }
 
   const flash = (message) => {
     setNotice(message)
@@ -614,49 +677,141 @@ function App() {
     flash(`Location change ${decision.toLowerCase()}.`)
   }
 
-  const handleRecordMeterReading = ({ meter, consumer, previousReading, currentReading }) => {
-    if (!consumer) {
+  const handleRecordMeterReading = async ({ meter, consumer, currentReading }) => {
+    const target = consumers.find((item) => item.id === consumer?.id || item.accountNo === consumer?.accountNo)
+    if (!target) {
       flash('This meter is not assigned to a consumer account.')
       return
     }
 
+    const officialPreviousReading = Number(target.lastReading || 0)
+    const current = Number(currentReading)
+    if (!Number.isFinite(current) || current < officialPreviousReading) {
+      flash(`Present reading must be at least the last approved reading of ${officialPreviousReading} m³.`)
+      return
+    }
+    if (pendingMeterReadings.some((item) => item.consumerId === target.id)) {
+      flash(`${target.name} already has a reading waiting for Office Staff approval.`)
+      return
+    }
+
     const pendingReading = {
-      id: `READ-${Date.now()}`,
-      meterSerial: meter.serialNo,
-      consumerId: consumer.id,
-      consumerName: consumer.name,
-      accountNo: consumer.accountNo,
-      zone: consumer.zone,
-      classification: consumer.classification || 'Residential',
-      previousReading,
-      currentReading,
+      id: `READ-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      meterSerial: meter?.serialNo || target.meterNo || 'Unassigned',
+      consumerId: target.id,
+      consumerName: target.name,
+      accountNo: target.accountNo,
+      zone: target.zone,
+      classification: target.classification || 'Residential',
+      previousReading: officialPreviousReading,
+      currentReading: current,
       recordedAt: new Date().toISOString().replace('T', ' ').slice(0, 19),
       status: 'Pending Office Confirmation',
     }
-    setPendingMeterReadings((prev) => [pendingReading, ...prev])
+    const result = await api.submitMeterReading({
+      ...pendingReading,
+      actorName: currentUser?.fullName || '',
+      actorRole: currentUser?.role || '',
+    })
+    if (!result.success || !result.data) {
+      flash(`Could not save this reading to the shared database. ${result.error || 'Try again after the database connection is restored.'}`)
+      return false
+    }
+    setPendingMeterReadings((prev) => [
+      result.data,
+      ...prev.filter((item) => item.id !== result.data.id),
+    ])
     recordAudit(
       'Meter',
       'Submitted Meter Consumption for Office Confirmation',
-      `${meter.serialNo} (${consumer.name})`,
-      `Reading submitted from ${previousReading} m³ to ${currentReading} m³. Awaiting Office Staff confirmation.`
+      `${pendingReading.meterSerial} (${target.name})`,
+      `Reading submitted from ${officialPreviousReading} m³ to ${current} m³. Awaiting Office Staff confirmation.`
     )
-    flash(`Reading submitted to Office Staff for confirmation.`)
+    flash('Reading saved to the shared database and submitted for Office Staff approval.')
+    return true
   }
 
-  const handleConfirmMeterReading = (pendingReading, confirmedBill) => {
+  const handlePresidentCorrectReading = async ({ consumer, previousReading, currentReading }) => {
+    if (currentUser?.role !== 'President') {
+      flash('Only the President can directly correct an official meter reading.')
+      return false
+    }
+
+    const target = consumers.find((item) => item.id === consumer?.id || item.accountNo === consumer?.accountNo)
+    if (!target) {
+      flash('This consumer account could not be found.')
+      return false
+    }
+    if (
+      !Number.isFinite(previousReading) ||
+      !Number.isFinite(currentReading) ||
+      previousReading < 0 ||
+      currentReading < previousReading
+    ) {
+      flash('Enter valid meter readings. The present reading must be at least the corrected previous reading.')
+      return false
+    }
+
+    const result = await api.correctMeterReading({
+      consumerId: target.id,
+      previousReading,
+      currentReading,
+      actorName: currentUser.fullName,
+      actorRole: currentUser.role,
+    })
+    if (!result?.success || !result.bill) {
+      flash(`Could not save the corrected meter reading. ${result?.error || 'Try again after refreshing the account data.'}`)
+      return false
+    }
+
+    const bill = result.bill
+    setConsumers((previous) => previous.map((item) => (
+      item.id === target.id ? { ...item, lastReading: currentReading } : item
+    )))
+    setBills((previous) => [bill, ...previous.filter((item) => item.id !== bill.id)])
+    setMeters((previous) => previous.map((meter) => (
+      meter.serialNo === (target.meterNo || 'Unassigned')
+        ? { ...meter, lastReading: currentReading, readingDate: new Date().toISOString().split('T')[0] }
+        : meter
+    )))
+    setAuditLogs((previous) => [{
+      id: `AUD-CORR-${Date.now()}`,
+      timestamp: new Date().toISOString().replace('T', ' ').slice(0, 19),
+      user: currentUser.fullName,
+      role: currentUser.role,
+      category: 'Meter',
+      action: 'President Corrected Meter Reading and Generated Bill',
+      target: `${target.meterNo || 'Unassigned'} (${target.name})`,
+      details: `Corrected previous reading to ${previousReading} m³ and recorded ${currentReading} m³. Consumption: ${bill.consumption} m³. Generated bill ${bill.id} for ₱${Number(bill.totalAmount).toFixed(2)}.`,
+      ip: '',
+    }, ...previous])
+    flash(`Correction saved. ${bill.consumption} m³ was billed at ₱${Number(bill.baseAmount).toFixed(2)} for water usage.`)
+    return true
+  }
+
+  const handleConfirmMeterReading = async (pendingReading, confirmedBill) => {
+    if (currentUser?.role !== 'Office Staffs') {
+      flash('Only Office Staff can approve meter readings.')
+      return false
+    }
+    const currentPendingReading = pendingMeterReadings.find((item) => item.id === pendingReading.id)
+    if (!currentPendingReading || currentPendingReading.status !== 'Pending Office Confirmation') {
+      flash('This meter reading is no longer awaiting approval.')
+      return false
+    }
     const bill = confirmedBill || calculateConsumptionBill(
       pendingReading.previousReading,
-      pendingReading.currentReading,
-      pendingReading.classification,
-      initialTariff
+      pendingReading.currentReading
     )
     const penalty = bill.penalty || 0
     const totalAmount = bill.totalAmount
-    handleQueueBill({
+    const billData = {
+      id: `WS-${240982 + bills.length}`,
       consumerId: pendingReading.consumerId,
       name: pendingReading.consumerName,
       accountNo: pendingReading.accountNo,
       zone: pendingReading.zone,
+      period: 'Sep 01 – Sep 30, 2026',
       prevReading: pendingReading.previousReading,
       presReading: pendingReading.currentReading,
       consumption: bill.consumption,
@@ -666,7 +821,22 @@ function App() {
       arrears: 0,
       penalty,
       totalAmount,
-    })
+      dueDate: '2026-10-15',
+    }
+    const result = await api.decideMeterReading(
+      pendingReading.id,
+      'Approved',
+      currentUser.fullName,
+      currentUser.role,
+      billData
+    )
+    if (!result.success) {
+      flash(`Could not approve this reading in the shared database. ${result.error || 'Refresh and try again.'}`)
+      return false
+    }
+    const savedBillData = { ...billData, ...(result.bill || {}) }
+    const queued = handleQueueBill(savedBillData, pendingReading.id)
+    if (!queued) return false
     setMeters((prev) => prev.map((meter) => (
       meter.serialNo === pendingReading.meterSerial
         ? { ...meter, lastReading: pendingReading.currentReading, readingDate: new Date().toISOString().split('T')[0] }
@@ -677,9 +847,36 @@ function App() {
       'Meter',
       'Confirmed Consumer Meter Consumption',
       `${pendingReading.meterSerial} (${pendingReading.consumerName})`,
-      `Confirmed ${pendingReading.previousReading} m³ → ${pendingReading.currentReading} m³. Statement: ₱ ${totalAmount.toFixed(2)}${penalty ? ` including ₱ ${penalty.toFixed(2)} penalty.` : '.'}`
+      `Confirmed ${pendingReading.previousReading} m³ → ${pendingReading.currentReading} m³. Statement: ₱ ${savedBillData.totalAmount.toFixed(2)}${savedBillData.penalty ? ` including ₱ ${savedBillData.penalty.toFixed(2)} penalty.` : '.'}`
     )
-    flash(`Reading confirmed. Current statement: ₱ ${totalAmount.toFixed(2)}.`)
+    flash(`Reading confirmed. Current statement: ₱ ${savedBillData.totalAmount.toFixed(2)}.`)
+    return true
+  }
+
+  const handleRejectMeterReading = async (pendingReading) => {
+    if (currentUser?.role !== 'Office Staffs') {
+      flash('Only Office Staff can reject meter readings.')
+      return
+    }
+    if (!pendingMeterReadings.some((item) => item.id === pendingReading.id)) return
+    const result = await api.decideMeterReading(
+      pendingReading.id,
+      'Rejected',
+      currentUser.fullName,
+      currentUser.role
+    )
+    if (!result.success) {
+      flash(`Could not reject this reading in the shared database. ${result.error || 'Refresh and try again.'}`)
+      return
+    }
+    setPendingMeterReadings((prev) => prev.filter((item) => item.id !== pendingReading.id))
+    recordAudit(
+      'Meter',
+      'Rejected Consumer Meter Consumption',
+      `${pendingReading.meterSerial} (${pendingReading.consumerName})`,
+      `Rejected submitted reading of ${pendingReading.currentReading} m³. The official consumer reading was not changed.`
+    )
+    flash(`Reading for ${pendingReading.consumerName} was rejected. The official meter reading remains unchanged.`)
   }
 
   // Action: Update Meter Asset
@@ -731,6 +928,30 @@ function App() {
       newMeter.serialNo,
       `Registered ${newMeter.brand} (${newMeter.size}) in warehouse inventory.`
     )
+  }
+
+  // Action: Delete Meter Asset (President / Admin only)
+  const handleDeleteMeter = async (meter) => {
+    if (currentUser.role !== 'President' && currentUser.role !== 'Administrator') {
+      flash('Only the President can remove meter assets.')
+      return
+    }
+
+    const serial = meter.serialNo || meter
+    const result = await api.deleteMeter(serial, currentUser.role)
+    if (!result?.success) {
+      flash(result?.error || 'Could not remove the meter asset.')
+      return
+    }
+
+    setMeters((prev) => prev.filter((m) => m.serialNo !== serial))
+    recordAudit(
+      'Meter',
+      'Removed Meter Asset',
+      serial,
+      `Permanently removed meter ${meter.brand || ''} (${serial}) from registry.`
+    )
+    flash(`Meter asset ${serial} was removed successfully.`)
   }
 
   const handleUpdateClusterBoundaries = (nextClusters) => {
@@ -824,8 +1045,20 @@ function App() {
   }
 
   // Action: Queue Bill from Calculator
-  const handleQueueBill = (billData) => {
-    const newBillId = `WS-${240982 + bills.length}`
+  const handleQueueBill = (billData, approvedReadingId) => {
+    const approvedReading = pendingMeterReadings.find((reading) => reading.id === approvedReadingId)
+    if (
+      currentUser?.role !== 'Office Staffs'
+      || !approvedReading
+      || approvedReading.status !== 'Pending Office Confirmation'
+      || approvedReading.consumerId !== billData.consumerId
+      || Number(approvedReading.currentReading) !== Number(billData.presReading)
+    ) {
+      flash('A bill can only be created from a meter reading approved by Office Staff.')
+      return false
+    }
+
+    const newBillId = billData.id || `WS-${240982 + bills.length}`
     const newBill = {
       id: newBillId,
       consumerId: billData.consumerId,
@@ -860,13 +1093,13 @@ function App() {
           : c
       )
     )
-    api.queueBill({ ...billData, id: newBillId }).catch((e) => console.warn('DB queue bill failed', e))
     recordAudit(
       'Billing',
       'Calculated & Queued Bill Statement',
       `${newBillId} (${billData.name})`,
       `Computed usage of ${billData.consumption} m³. Total payable: ₱ ${billData.totalAmount.toFixed(2)}.`
     )
+    return true
   }
 
   // Action: Execute Batch Bill Generation
@@ -948,9 +1181,114 @@ function App() {
     )
   }
 
+  // Action: President Override Bill Due Date & Apply Custom Penalty
+  const handleUpdateBillScheduleAndPenalty = async ({ billId, newDueDate, addedArrears, penaltyAmount, reason }) => {
+    if (!['President', 'Administrator'].includes(currentUser?.role)) {
+      flash('Only the President or Administrator can adjust bill arrears.')
+      return false
+    }
+    const bill = bills.find((item) => item.id === billId)
+    if (!bill) {
+      flash('The selected bill could not be found. Refresh and try again.')
+      return false
+    }
+    const result = await api.updateBillArrears({
+      billId,
+      actorName: currentUser.fullName,
+      actorRole: currentUser.role,
+      newDueDate,
+      addedArrears,
+      penaltyAmount,
+      reason,
+    })
+    if (!result?.success || !result.data) {
+      flash(`Could not update this bill in the shared database. ${result?.error || 'Refresh and try again.'}`)
+      return false
+    }
+    const updatedBill = {
+      ...bill,
+      ...result.data,
+      avatar: bill.avatar,
+    }
+    setBills((prev) =>
+      prev.map((b) => {
+        return b.id === billId
+          ? {
+              ...b,
+              ...updatedBill,
+              presidentAdjustmentReason: reason || 'President billing adjustment',
+            }
+          : b
+      })
+    )
+    recordAudit(
+      'Billing',
+      'President Billing and Arrears Adjustment',
+      `Statement ${billId} (${bill.accountNo})`,
+      `Added ₱${Number(addedArrears || 0).toFixed(2)} arrears. New arrears: ₱${Number(updatedBill.arrears).toFixed(2)}. Updated statement total: ₱${Number(updatedBill.totalAmount).toFixed(2)}. Penalty: ₱${Number(updatedBill.penalty).toFixed(2)}. Reason: ${reason || 'President billing adjustment'}.`
+    )
+    return true
+  }
+
+  const handleDeleteBill = async (bill) => {
+    if (currentUser?.role !== 'President') {
+      flash('Only the President can remove consumer bills.')
+      return false
+    }
+
+    const result = await api.deleteBill(bill.id, currentUser.fullName, currentUser.role)
+    if (!result?.success) {
+      flash(result?.error || 'Could not remove the bill.')
+      return false
+    }
+
+    setBills((previous) => previous.filter((item) => item.id !== bill.id))
+    setPayments((previous) => previous.filter((payment) => payment.billId !== bill.id))
+    const auditLog = {
+      id: `AUD-DEL-${Date.now()}`,
+      timestamp: new Date().toISOString().replace('T', ' ').slice(0, 19),
+      user: currentUser.fullName,
+      role: currentUser.role,
+      category: 'Billing',
+      action: 'Removed Consumer Bill',
+      target: `${bill.id} (${bill.accountNo})`,
+      details: `Removed ${bill.status} bill for ${bill.name}. Linked payment records removed: ${result.deletedPayments || 0}.`,
+      ip: '',
+    }
+    setAuditLogs((previous) => [auditLog, ...previous])
+    flash(`Bill ${bill.id} was removed.${result.deletedPayments ? ` ${result.deletedPayments} linked payment record(s) were also removed.` : ''}`)
+    return true
+  }
+
   // Action: Process Payment at POS
-  const handleProcessPayment = (billId, paymentRecord) => {
-    setPayments((prev) => [paymentRecord, ...prev])
+  const handleProcessPayment = async (billId, paymentRecord) => {
+    const isPayMongoPayment = typeof paymentRecord.method === 'string'
+      && paymentRecord.method.startsWith('PayMongo')
+    const paymentMethod = isPayMongoPayment ? 'GCash' : paymentRecord.method
+    const paymentResult = await api.processPayment({
+      billId,
+      orNumber: paymentRecord.orNumber,
+      consumerId: paymentRecord.consumerId,
+      amountPaid: paymentRecord.amountPaid,
+      tendered: paymentRecord.tendered,
+      change: paymentRecord.change,
+      gatewayReference: paymentRecord.gatewayReference,
+      method: paymentMethod,
+      notes: [paymentRecord.notes, isPayMongoPayment ? `Settled through ${paymentRecord.method}.` : '']
+        .filter(Boolean)
+        .join(' '),
+      cashier: paymentRecord.cashier || currentUser.fullName,
+    })
+
+    if (!paymentResult?.success) {
+      throw new Error(paymentResult?.error || 'The payment could not be saved. The bill remains unpaid.')
+    }
+    const savedPayment = paymentResult.data || {}
+
+    setPayments((prev) => prev.some((payment) => (
+      payment.gatewayReference === paymentRecord.gatewayReference
+      || (paymentRecord.gatewayReference && payment.notes === paymentRecord.notes)
+    )) ? prev : [{ ...paymentRecord, id: savedPayment.id ?? paymentRecord.id, orNumber: savedPayment.orNumber ?? paymentRecord.orNumber }, ...prev])
 
     // Mark bill as Paid
     setBills((prev) =>
@@ -958,11 +1296,15 @@ function App() {
         if (b.id === billId) {
           return {
             ...b,
-            status: 'Paid',
-            paidDate: new Date().toISOString().split('T')[0],
-            receiptNo: paymentRecord.orNumber,
-            penalty: 0,
-            arrears: 0,
+            totalAmount: Number(savedPayment.billTotal ?? b.totalAmount),
+            status: savedPayment.status || 'Paid',
+            amountDue: Number(savedPayment.remainingAmount ?? 0),
+            ...(savedPayment.status === 'Paid' ? {
+              paidDate: new Date().toISOString().split('T')[0],
+              receiptNo: savedPayment.orNumber || paymentRecord.orNumber,
+              penalty: 0,
+              arrears: 0,
+            } : {}),
           }
         }
         return b
@@ -989,27 +1331,17 @@ function App() {
       })
     )
 
-    // Persist Payment into MySQL database
-    api.processPayment({
-      billId,
-      orNumber: paymentRecord.orNumber,
-      consumerId: paymentRecord.consumerId,
-      amountPaid: paymentRecord.amountPaid,
-      tendered: paymentRecord.tendered,
-      change: paymentRecord.change,
-      method: paymentRecord.method,
-      notes: paymentRecord.notes,
-      cashier: currentUser.fullName,
-    }).then(() => {
-      api.checkDbStatus().then((st) => setDbStatus(st))
-    }).catch((e) => console.warn('DB processPayment failed', e))
+    api.checkDbStatus()
+      .then((st) => setDbStatus(st))
+      .catch((error) => console.warn('Could not refresh database status after payment:', error))
 
     recordAudit(
       'Payment',
-      'Counter Payment Cleared',
+      savedPayment.status === 'Paid' ? 'Bill Payment Completed' : 'Partial Bill Payment Received',
       paymentRecord.orNumber,
-      `Received ₱ ${paymentRecord.amountPaid.toFixed(2)} from ${paymentRecord.consumerName}. Bill ${billId} updated to PAID.`
+      `Received ₱ ${Number(paymentRecord.amountPaid).toFixed(2)} from ${paymentRecord.consumerName}. Remaining balance: ₱${Number(savedPayment.remainingAmount || 0).toFixed(2)}.`
     )
+    return savedPayment
   }
 
   // Action: Add Complaint / Maintenance Ticket
@@ -1339,11 +1671,12 @@ function App() {
           serviceBoundary={serviceBoundary}
           clusterBoundaries={clusterBoundaries}
           onClose={() => setShowRegistrationModal(false)}
-          onRegistered={(user) => {
-            // Generate unique account credentials and hardware assets for the new household
-            const newAccountNo = `ACC-${Math.floor(10000 + Math.random() * 90000)}`
-            const newConsumerId = `C-${1000 + consumers.length + 1}`
-            const newMeterNo = `MTR-${Math.floor(10000 + Math.random() * 90000)}`
+          onRegistered={async (user) => {
+            // Generate truly unique account credentials — never use consumers.length (stale closure)
+            const ts = Date.now()
+            const newAccountNo = `ACC-${ts.toString().slice(-6)}`
+            const newConsumerId = `C-${ts}`
+            const newMeterNo = `MTR-${(ts + Math.floor(Math.random() * 9999)).toString().slice(-6)}`
             const initials = user.fullName
               .split(' ')
               .map((n) => n[0])
@@ -1396,7 +1729,7 @@ function App() {
                   date: newConsumer.connectionDate,
                   type: 'Initial Connection',
                   technician: 'Jamie Dizon',
-                  notes: 'New verified household meter line provisioned.',
+                  notes: 'New household meter line provisioned.',
                 },
               ],
             }
@@ -1429,15 +1762,20 @@ function App() {
               approvalStatus: 'Pending',
             }
 
-            // Save to application states
-            setConsumers((prev) => [newConsumer, ...prev])
-            api.addConsumer({
+            // Persist first so a failed server registration is not shown as successful.
+            const persistenceResponse = await api.addConsumer({
               ...newConsumer,
               latitude: user.serviceCoordinates?.lat,
               longitude: user.serviceCoordinates?.lng,
               approvalStatus: 'Pending',
               status: 'Pending Approval',
-            }).catch((error) => console.warn('DB registered consumer insert failed', error))
+            })
+            if (!persistenceResponse?.success) {
+              throw new Error(persistenceResponse?.error || 'The server rejected the consumer registration.')
+            }
+
+            // Save to application states only after the database accepts it.
+            setConsumers((prev) => [newConsumer, ...prev])
             setMeters((prev) => [newMeter, ...prev])
             setGeoPins((prev) => [...prev, newPin])
             setRegisteredUsers((prev) => [regUserData, ...prev.filter((item) => item.username !== user.username)])
@@ -1482,22 +1820,52 @@ function App() {
         complaints={complaints}
         onPayBillOnline={(billId, pRecord) => handleProcessPayment(billId, pRecord)}
         onFileComplaint={(complaint) => handleAddComplaint(complaint)}
-        onUpdateProfile={({ email, password }) => {
-          setCurrentUser((previous) => ({ ...previous, email, ...(password ? { password } : {}) }))
+        onUpdateProfile={async ({ email, contact, password }) => {
+          setCurrentUser((previous) => ({
+            ...previous,
+            ...(email ? { email } : {}),
+            ...(contact ? { contact, contactNo: contact } : {}),
+            ...(password ? { password } : {}),
+          }))
           setConsumers((previous) => previous.map((consumer) => (
             consumer.id === currentUser.consumerId || consumer.accountNo === currentUser.accountNo
-              ? { ...consumer, email, ...(password ? { password } : {}) }
+              ? {
+                  ...consumer,
+                  ...(email ? { email } : {}),
+                  ...(contact ? { contact, contactNo: contact } : {}),
+                  ...(password ? { password } : {}),
+                }
               : consumer
           )))
           setRegisteredUsers((previous) => previous.map((user) => (
             user.username === currentUser.username || user.accountNo === currentUser.accountNo
-              ? { ...user, email, ...(password ? { password } : {}) }
+              ? {
+                  ...user,
+                  ...(email ? { email } : {}),
+                  ...(contact ? { contact, contactNo: contact } : {}),
+                  ...(password ? { password } : {}),
+                }
               : user
           )))
+
+          try {
+            await api.updateConsumerProfile({
+              consumerId: currentUser.consumerId || currentUser.id || currentUser.accountNo,
+              accountNo: currentUser.accountNo,
+              username: currentUser.username,
+              email,
+              contact,
+              password,
+            })
+          } catch (err) {
+            console.warn('Backend profile update error:', err)
+          }
         }}
         onSignOut={() => {
           setIsLoggedIn(false)
-          flash('Signed out of consumer portal.')
+          setCurrentUser(DEFAULT_CURRENT_USER)
+          setLoginModalMode('consumer')
+          setShowLoginModal(true)
         }}
         flash={flash}
       />
@@ -1537,7 +1905,7 @@ function App() {
         </div>
 
         <nav>
-          {visibleNavItems.map(({ id, label, icon }) => {
+          {visibleNavItems.map(({ id, label, icon: IconComponent }) => {
             let count = 0
             let badgeClass = ''
             if (id === 'Batch Billing') {
@@ -1562,7 +1930,13 @@ function App() {
                   setMobileMenuOpen(false)
                 }}
               >
-                <i>{icon}</i>
+                <i>
+                  {typeof IconComponent === 'function' || (typeof IconComponent === 'object' && IconComponent !== null) ? (
+                    <IconComponent size={18} strokeWidth={2} />
+                  ) : (
+                    IconComponent
+                  )}
+                </i>
                 <span>{label}</span>
                 {count > 0 && (
                   <b className={`count-badge ${badgeClass}`.trim()}>{count}</b>
@@ -1571,25 +1945,6 @@ function App() {
             )
           })}
         </nav>
-
-        <div className="sidebar-bottom">
-          <div
-            className="user-chip"
-            onClick={() => {
-              setIsLoggedIn(false)
-              flash('Returned to public landing page.')
-            }}
-            title="Click to Sign Out"
-            style={{ cursor: 'pointer' }}
-          >
-            <div className="avatar user">{currentUser.avatar || 'JD'}</div>
-            <div>
-              <strong>{currentUser.fullName}</strong>
-              <small>{currentUser.role}</small>
-            </div>
-            <span title="Sign Out">🚪</span>
-          </div>
-        </div>
       </aside>
 
       {/* Main Content Viewport */}
@@ -1602,10 +1957,7 @@ function App() {
                 setActiveNav(destination || 'Overview')
               }}
               complaints={complaints}
-              onSignOut={() => {
-                setIsLoggedIn(false)
-                flash('Field Staff signed out.')
-              }}
+              onSignOut={confirmSignOut}
             />
           </div>
         )}
@@ -1625,14 +1977,11 @@ function App() {
               <button
                 type="button"
                 className="btn-signout-mini"
-                onClick={() => {
-                  setIsLoggedIn(false)
-                  flash('Field Staff signed out.')
-                }}
+                onClick={confirmSignOut}
                 title="Sign Out"
                 aria-label="Sign Out"
               >
-                🚪
+                ↪
               </button>
             </div>
           )}
@@ -1780,18 +2129,30 @@ function App() {
               })()}
             </div>
 
-            <button
-              className="btn-outline-sm"
-              style={{ display: 'flex', alignItems: 'center', gap: '5px' }}
-              title="Sign Out"
-              onClick={() => {
-                setIsLoggedIn(false)
-                flash('Successfully signed out.')
-              }}
-            >
-              <span>🚪</span> Sign Out
-            </button>
-
+            {/* User Profile & Sign Out in Upper Right */}
+            <div className="topbar-user-section">
+              <div
+                className="topbar-user-chip"
+                onClick={confirmSignOut}
+                title="Click to Sign Out"
+              >
+                <div className="avatar user">{currentUser.avatar || 'JD'}</div>
+                <div className="topbar-user-details">
+                  <strong>{currentUser.fullName}</strong>
+                  <small>{currentUser.role}</small>
+                </div>
+              </div>
+              <button
+                type="button"
+                className="topbar-signout-btn"
+                onClick={confirmSignOut}
+                title="Sign Out"
+                aria-label="Sign Out"
+              >
+                <LogOut size={16} strokeWidth={2.2} />
+                <span>Sign Out</span>
+              </button>
+            </div>
           </div>
         </header>
 
@@ -1885,6 +2246,7 @@ function App() {
               onDeleteConsumer={handleDeleteConsumer}
               onRequestConsumerLocationChange={handleRequestConsumerLocationChange}
               onDecideConsumerLocationChange={handleDecideConsumerLocationChange}
+              onRecordMeterReading={handleRecordMeterReading}
               onOpenCalculator={handleOpenCalculatorWithConsumer}
               onOpenMap={handleOpenMapWithConsumer}
               initialSearch={globalNavSearch}
@@ -1903,8 +2265,10 @@ function App() {
               bills={bills}
               onUpdateMeter={handleUpdateMeter}
               onAddMeter={handleAddMeter}
+              onDeleteMeter={handleDeleteMeter}
               onRecordMeterReading={handleRecordMeterReading}
               onConfirmMeterReading={handleConfirmMeterReading}
+              onRejectMeterReading={handleRejectMeterReading}
               initialSearch={globalNavSearch}
               clusterBoundaries={clusterBoundaries}
               flash={flash}
@@ -1935,7 +2299,9 @@ function App() {
           {activeNav === 'Consumption Calculator' && (
             <AutomatedConsumptionCalculator
               consumers={consumers}
-              onQueueBill={handleQueueBill}
+              currentUser={currentUser}
+              onRecordMeterReading={handleRecordMeterReading}
+              onPresidentCorrectReading={handlePresidentCorrectReading}
               flash={flash}
             />
           )}
@@ -1944,6 +2310,9 @@ function App() {
           {activeNav === 'Batch Billing' && (
             <BatchBillGeneration
               bills={bills}
+              currentUser={currentUser}
+              onUpdateBillScheduleAndPenalty={handleUpdateBillScheduleAndPenalty}
+              onDeleteBill={handleDeleteBill}
               onOpenPOS={handleOpenPOSWithAccount}
               flash={flash}
             />
@@ -2050,6 +2419,44 @@ function App() {
           </nav>
         )}
       </main>
+
+      {/* ── Sign Out Confirmation Modal ── */}
+      {showSignOutConfirm && (
+        <div
+          className="modal-backdrop"
+          onClick={() => setShowSignOutConfirm(false)}
+          style={{ zIndex: 99999 }}
+        >
+          <div
+            className="modal"
+            onClick={(e) => e.stopPropagation()}
+            style={{ maxWidth: '360px', textAlign: 'center' }}
+          >
+            <div className="modal-title-wrap">
+              <h2 style={{ marginTop: '8px' }}>Sign Out?</h2>
+              <p className="modal-copy">
+                You'll be returned to the login screen. Any unsaved changes will remain in the system.
+              </p>
+            </div>
+            <div style={{ display: 'flex', gap: '10px', marginTop: '18px' }}>
+              <button
+                className="btn-outline-sm"
+                style={{ flex: 1, justifyContent: 'center' }}
+                onClick={() => setShowSignOutConfirm(false)}
+              >
+                Cancel
+              </button>
+              <button
+                className="primary-button"
+                style={{ flex: 1, justifyContent: 'center', background: '#ef4444' }}
+                onClick={() => doSignOut()}
+              >
+                Yes, Sign Out
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

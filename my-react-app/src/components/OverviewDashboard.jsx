@@ -1,3 +1,15 @@
+import {
+  ReceiptText,
+  Bell,
+  UserPlus,
+  BarChart3,
+  CreditCard,
+  Users,
+  AlertTriangle,
+  CheckCircle2,
+  ArrowRight
+} from 'lucide-react'
+
 export default function OverviewDashboard({
   currentUser,
   consumers,
@@ -45,24 +57,20 @@ export default function OverviewDashboard({
           {isOfficeStaff ? (
             <>
               <button className="primary-button" onClick={() => onNavigate('Batch Billing')}>
-                <span>▤</span> Run Batch Billing ({readyBills.length})
+                <ReceiptText size={16} /> Run Batch Billing ({readyBills.length})
               </button>
               <button className="btn-secondary" onClick={() => onNavigate('Notifications')}>
-                <span>✉️</span> Dispatch Notices
+                <Bell size={16} /> Dispatch Notices
               </button>
               <button className="btn-secondary" onClick={onOpenRegisterModal}>
-                <span>＋</span> Register Consumer
+                <UserPlus size={16} /> Register Consumer
               </button>
             </>
-          ) : isPresident ? (
-            <button className="primary-button" onClick={() => onNavigate('Reports')}>
-              <span>📊</span> Executive Reports
-            </button>
-          ) : (
+          ) : !isPresident ? (
             <button className="primary-button" onClick={onOpenRegisterModal}>
-              <span>＋</span> Register Consumer
+              <UserPlus size={16} /> Register Consumer
             </button>
-          )}
+          ) : null}
         </div>
       </section>
 
@@ -72,7 +80,7 @@ export default function OverviewDashboard({
         <article className="stat-card" onClick={() => onNavigate('Payment P.O.S.')}>
           <div className="stat-top">
             <span>Total Collections</span>
-            <span className="stat-icon">₱</span>
+            <span className="stat-icon"><CreditCard size={16} /></span>
           </div>
           <strong>
             ₱ {totalCollections.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
@@ -86,7 +94,7 @@ export default function OverviewDashboard({
         <article className="stat-card" onClick={() => onNavigate('Household Profiling')}>
           <div className="stat-top">
             <span>Active Connections</span>
-            <span className="stat-icon blue">⌁</span>
+            <span className="stat-icon blue"><Users size={16} /></span>
           </div>
           <strong>{activeConnections.toLocaleString()}</strong>
           <p><mark>↑ 5.1%</mark> new households profiled</p>
@@ -98,7 +106,7 @@ export default function OverviewDashboard({
         <article className="stat-card" onClick={() => onNavigate('Arrears & Penalties')}>
           <div className="stat-top">
             <span>Outstanding Balance</span>
-            <span className="stat-icon orange">!</span>
+            <span className="stat-icon orange"><AlertTriangle size={16} /></span>
           </div>
           <strong>
             ₱ {totalOutstanding.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
@@ -111,7 +119,7 @@ export default function OverviewDashboard({
         <article className="stat-card" onClick={() => onNavigate('Meter Assets')}>
           <div className="stat-top">
             <span>Meter Reading Accuracy</span>
-            <span className="stat-icon green">✓</span>
+            <span className="stat-icon green"><CheckCircle2 size={16} /></span>
           </div>
           <strong>98.6<span>%</span></strong>
           <p><mark className="green-mark">↑ 2.4%</mark> accuracy with calibration</p>
@@ -231,7 +239,7 @@ export default function OverviewDashboard({
                 <span className="action-icon aqua-icon">⌁</span>
                 <span>
                   <strong>Calculator</strong>
-                  <small>Tiered tariff engine</small>
+                  <small>Fixed ₱10 per m³ billing</small>
                 </span>
                 <b>→</b>
               </button>

@@ -122,26 +122,7 @@ CREATE TABLE IF NOT EXISTS `geo_connections` (
 ) ENGINE=InnoDB;
 
 -- --------------------------------------------------------------------
--- 6. TARIFF CONFIGURATION
--- Codified rate brackets for automated consumption calculations
--- --------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS `tariff_rates` (
-  `id` INT AUTO_INCREMENT PRIMARY KEY,
-  `classification` ENUM('Residential', 'Commercial', 'Institutional') NOT NULL UNIQUE,
-  `min_charge` DECIMAL(10, 2) NOT NULL,             -- Base fee for first 10 m³
-  `min_cum` INT NOT NULL DEFAULT 10,
-  `bracket_1_rate` DECIMAL(10, 2) NOT NULL,         -- 11 - 20 m³
-  `bracket_2_rate` DECIMAL(10, 2) NOT NULL,         -- 21 - 30 m³
-  `bracket_3_rate` DECIMAL(10, 2) NOT NULL,         -- 31+ m³
-  `environmental_fee_rate` DECIMAL(4, 2) NOT NULL DEFAULT 0.10, -- 10%
-  `meter_maintenance_fee` DECIMAL(10, 2) NOT NULL DEFAULT 25.00,
-  `overdue_penalty_rate` DECIMAL(4, 2) NOT NULL DEFAULT 0.10,   -- 10%
-  `is_active` BOOLEAN NOT NULL DEFAULT TRUE,
-  `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-) ENGINE=InnoDB;
-
--- --------------------------------------------------------------------
--- 7. BILLING STATEMENTS
+-- 6. BILLING STATEMENTS
 -- Multi-account verified billing ledger
 -- --------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS `bills` (
@@ -168,6 +149,32 @@ CREATE TABLE IF NOT EXISTS `bills` (
     REFERENCES `consumers` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
   INDEX `idx_bills_status` (`status`),
   INDEX `idx_bills_due_date` (`due_date`)
+) ENGINE=InnoDB;
+
+-- --------------------------------------------------------------------
+-- 7. METER READING APPROVALS
+-- Field readings remain pending until reviewed by Office Staff.
+-- --------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS `meter_readings` (
+  `id` BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  `reading_code` VARCHAR(64) NOT NULL UNIQUE,
+  `consumer_id` INT NOT NULL,
+  `meter_serial` VARCHAR(50) NOT NULL,
+  `previous_reading` DECIMAL(10, 2) NOT NULL,
+  `current_reading` DECIMAL(10, 2) NOT NULL,
+  `classification` ENUM('Residential', 'Commercial', 'Institutional') NOT NULL DEFAULT 'Residential',
+  `recorded_by_name` VARCHAR(100) NOT NULL,
+  `status` ENUM('Pending', 'Approved', 'Rejected') NOT NULL DEFAULT 'Pending',
+  `reviewed_by_name` VARCHAR(100) DEFAULT NULL,
+  `reviewed_at` DATETIME DEFAULT NULL,
+  `bill_id` INT DEFAULT NULL,
+  `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT `fk_meter_readings_consumer` FOREIGN KEY (`consumer_id`)
+    REFERENCES `consumers` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `fk_meter_readings_bill` FOREIGN KEY (`bill_id`)
+    REFERENCES `bills` (`id`) ON DELETE SET NULL ON UPDATE CASCADE,
+  INDEX `idx_meter_readings_status_created` (`status`, `created_at`),
+  INDEX `idx_meter_readings_consumer_status` (`consumer_id`, `status`)
 ) ENGINE=InnoDB;
 
 -- --------------------------------------------------------------------
@@ -322,4 +329,3 @@ CREATE TABLE IF NOT EXISTS `service_ratings` (
   INDEX `idx_ratings_ticket` (`ticket_no`),
   INDEX `idx_ratings_consumer` (`consumer_id`)
 ) ENGINE=InnoDB;
-

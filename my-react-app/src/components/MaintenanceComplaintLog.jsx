@@ -436,56 +436,6 @@ export default function MaintenanceComplaintLog({
                 />
               </label>
 
-              <label style={{ marginTop: '12px', display: 'block' }}>
-                Attach Resolution Photo (optional)
-                <div
-                  style={{
-                    marginTop: '6px',
-                    border: '2px dashed #d1e8e4',
-                    borderRadius: '8px',
-                    padding: '12px',
-                    textAlign: 'center',
-                    background: resolutionImage ? '#f0fdf4' : '#f8fdfc',
-                    cursor: 'pointer',
-                    position: 'relative',
-                  }}
-                  onClick={() => document.getElementById('resolution-photo-input').click()}
-                >
-                  {resolutionImage ? (
-                    <>
-                      <img
-                        src={resolutionImage}
-                        alt="Resolution"
-                        style={{ maxHeight: '160px', maxWidth: '100%', borderRadius: '6px', display: 'block', margin: '0 auto 8px' }}
-                      />
-                      <button
-                        type="button"
-                        style={{ fontSize: '11px', color: '#ef4444', background: 'none', border: 'none', cursor: 'pointer' }}
-                        onClick={(e) => { e.stopPropagation(); setResolutionImage(null) }}
-                      >
-                        ✕ Remove photo
-                      </button>
-                    </>
-                  ) : (
-                    <span style={{ color: '#6b9e94', fontSize: '13px' }}>📷 Click to upload repair photo</span>
-                  )}
-                  <input
-                    id="resolution-photo-input"
-                    type="file"
-                    accept="image/*"
-                    style={{ display: 'none' }}
-                    onChange={(e) => {
-                      const file = e.target.files[0]
-                      if (!file) return
-                      const reader = new FileReader()
-                      reader.onload = (ev) => setResolutionImage(ev.target.result)
-                      reader.readAsDataURL(file)
-                      e.target.value = ''
-                    }}
-                  />
-                </div>
-              </label>
-
               <div className="notice-box">
                 Resolving this ticket will record an official audit trail entry and notify the consumer profile.
               </div>

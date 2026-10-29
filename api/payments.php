@@ -21,25 +21,96 @@ if ($method === 'POST') {
     $method = $input['method'] ?? 'Cash';
     $notes = $input['notes'] ?? 'Over-the-counter bill settlement.';
     $cashierName = $input['cashier'] ?? 'Counter Cashier Alpha';
+    $allowedMethods = ['Cash', 'GCash', 'Maya', 'Bank Transfer'];
 
     try {
+        if ($billNo === '' || $orNumber === '' || $amountPaid <= 0) {
+            sendJsonResponse(['success' => false, 'error' => 'A bill, receipt number, and positive payment amount are required.'], 400);
+        }
+        if (!in_array($method, $allowedMethods, true)) {
+            sendJsonResponse(['success' => false, 'error' => 'Unsupported payment method.'], 400);
+        }
+
         $pdo->beginTransaction();
 
-        // Find bill
-        $bStmt = $pdo->prepare("SELECT id, consumer_id, status FROM bills WHERE bill_no = ?");
+        $bStmt = $pdo->prepare("SELECT id, consumer_id, status, total_amount FROM bills WHERE bill_no = ? FOR UPDATE");
         $bStmt->execute([$billNo]);
         $billRow = $bStmt->fetch();
 
-        $billDbId = $billRow ? $billRow['id'] : null;
-        $consumerDbId = $billRow ? $billRow['consumer_id'] : null;
-
-        // If consumerDbId still null, try finding by consumer_code
-        if (!$consumerDbId && !empty($consumerIdCode)) {
-            $cStmt = $pdo->prepare("SELECT id FROM consumers WHERE consumer_code = ? OR account_no = ?");
-            $cStmt->execute([$consumerIdCode, $consumerIdCode]);
-            $cRow = $cStmt->fetch();
-            if ($cRow) $consumerDbId = $cRow['id'];
+        if (!$billRow) {
+            $pdo->rollBack();
+            sendJsonResponse(['success' => false, 'error' => 'The bill was not found. No payment was recorded.'], 404);
         }
+        if (!in_array($billRow['status'], ['Ready', 'Overdue', 'Paid'], true)) {
+            $pdo->rollBack();
+            sendJsonResponse(['success' => false, 'error' => 'This bill is not available for payment.'], 409);
+        }
+        $gatewayReference = trim((string)($input['gatewayReference'] ?? ''));
+        if ($gatewayReference !== '') {
+            $existingPayment = $pdo->prepare("
+                SELECT id, or_number, amount_paid
+                FROM payments
+                WHERE bill_id = ? AND notes LIKE ?
+                LIMIT 1
+            ");
+            $existingPayment->execute([
+                $billRow['id'],
+                '%PayMongo Checkout verified settlement (' . $gatewayReference . ').%',
+            ]);
+            $existing = $existingPayment->fetch();
+            if ($existing) {
+                $paidSummary = $pdo->prepare('SELECT COALESCE(SUM(amount_paid), 0) FROM payments WHERE bill_id = ?');
+                $paidSummary->execute([$billRow['id']]);
+                $paidTotal = (float)$paidSummary->fetchColumn();
+                $remainingAmount = max(0, round((float)$billRow['total_amount'] - $paidTotal, 2));
+                $status = $remainingAmount <= 0 ? 'Paid' : $billRow['status'];
+                if ($status === 'Paid' && $billRow['status'] !== 'Paid') {
+                    $settleBill = $pdo->prepare("
+                        UPDATE bills
+                        SET status = 'Paid', paid_date = NOW(), days_overdue = 0, penalty = 0
+                        WHERE id = ? AND status IN ('Ready', 'Overdue')
+                    ");
+                    $settleBill->execute([$billRow['id']]);
+                    if ($settleBill->rowCount() !== 1) {
+                        throw new RuntimeException('Bill status changed before payment could be committed.');
+                    }
+                }
+                $pdo->commit();
+                sendJsonResponse([
+                    'success' => true,
+                    'message' => 'This PayMongo payment was already recorded.',
+                    'data' => [
+                        'id' => $existing['id'],
+                        'orNumber' => $existing['or_number'],
+                        'billId' => $billNo,
+                        'amountPaid' => (float)$existing['amount_paid'],
+                        'billTotal' => (float)$billRow['total_amount'],
+                        'remainingAmount' => $remainingAmount,
+                        'status' => $status,
+                        'alreadyRecorded' => true,
+                    ],
+                ]);
+            }
+        }
+
+        if ($billRow['status'] === 'Paid') {
+            $pdo->rollBack();
+            sendJsonResponse(['success' => false, 'error' => 'This bill is already paid.'], 409);
+        }
+
+        $paidSummary = $pdo->prepare('SELECT COALESCE(SUM(amount_paid), 0) FROM payments WHERE bill_id = ?');
+        $paidSummary->execute([$billRow['id']]);
+        $paidBefore = (float)$paidSummary->fetchColumn();
+        $totalAmount = (float)$billRow['total_amount'];
+        $remainingBefore = max(0, round($totalAmount - $paidBefore, 2));
+        if ((int)round($amountPaid * 100) > (int)round($remainingBefore * 100)) {
+            $pdo->rollBack();
+            sendJsonResponse(['success' => false, 'error' => 'Payment amount exceeds the remaining bill balance. No payment was recorded.'], 409);
+        }
+        $billDbId = $billRow['id'];
+        $consumerDbId = $billRow['consumer_id'];
+        $remainingAfter = max(0, round($remainingBefore - $amountPaid, 2));
+        $billStatusAfter = $remainingAfter <= 0 ? 'Paid' : $billRow['status'];
 
         // 1. Insert payment record
         $insPay = $pdo->prepare("
@@ -58,14 +129,17 @@ if ($method === 'POST') {
         ]);
         $paymentId = $pdo->lastInsertId();
 
-        // 2. Mark bill as Paid
-        if ($billDbId) {
+        // 2. Update outstanding balance status
+        if ($billDbId && $billStatusAfter === 'Paid') {
             $updBill = $pdo->prepare("
-                UPDATE bills 
+                UPDATE bills
                 SET status = 'Paid', paid_date = NOW(), days_overdue = 0, penalty = 0 
-                WHERE id = ?
+                WHERE id = ? AND status IN ('Ready', 'Overdue')
             ");
             $updBill->execute([$billDbId]);
+            if ($updBill->rowCount() !== 1) {
+                throw new RuntimeException('Bill status changed before payment could be committed.');
+            }
         }
 
         // 3. Update consumer status if they were overdue
@@ -75,7 +149,7 @@ if ($method === 'POST') {
             $chkOverdue->execute([$consumerDbId, $billDbId ?? 0]);
             $otherOverdue = (int)$chkOverdue->fetch()['c'];
 
-            if ($otherOverdue === 0) {
+            if ($otherOverdue === 0 && $billStatusAfter === 'Paid') {
                 $updConsumer = $pdo->prepare("UPDATE consumers SET status = 'Active' WHERE id = ?");
                 $updConsumer->execute([$consumerDbId]);
 
@@ -94,7 +168,8 @@ if ($method === 'POST') {
             $logCode,
             $cashierName,
             "{$orNumber} / Bill {$billNo}",
-            "Received ₱ " . number_format($amountPaid, 2) . " via {$method}. Bill updated to PAID.",
+            "Received ₱ " . number_format($amountPaid, 2) . " via {$method}. Remaining balance: ₱ " .
+                number_format($remainingAfter, 2) . ". Bill status: {$billStatusAfter}.",
             $_SERVER['REMOTE_ADDR'] ?? '127.0.0.1'
         ]);
 
@@ -108,8 +183,10 @@ if ($method === 'POST') {
                 'orNumber' => $orNumber,
                 'billId' => $billNo,
                 'amountPaid' => $amountPaid,
+                'billTotal' => $totalAmount,
                 'method' => $method,
-                'status' => 'Paid'
+                'remainingAmount' => $remainingAfter,
+                'status' => $billStatusAfter,
             ]
         ]);
     } catch (Exception $e) {

@@ -5,18 +5,23 @@
    ==================================================================== */
 
 :root {
-  --portal-bg: #edf2f7;
-  --portal-card-bg: #ffffff;
-  --portal-primary: #0284c7;
-  --portal-primary-hover: #0369a1;
-  --portal-accent: #38bdf8;
-  --portal-dark: #0f172a;
-  --portal-muted: #64748b;
-  --portal-border: #e2e8f0;
+  /* Design Specification Palette */
+  --portal-primary: #0284c7;        /* 1. Ocean Blue — CTAs, active nav, avatar, buttons */
+  --portal-primary-hover: #0369a1;  /* Ocean Blue Hover */
+  --portal-accent: #38bdf8;         /* 2. Sky Cyan — gradient tail, highlights, view-all */
+  --portal-bg: #e8f0f2;             /* 3. Fog White — neumorphic base, card/input backgrounds */
+  --portal-card-bg: #e8f0f2;
+  --portal-dark: #102033;           /* 4. Ink Navy — headings */
+  --portal-muted: #617286;          /* 4. Ink Muted — secondary/muted text */
+  --portal-success: #0d9488;        /* 5. Seafoam Teal — paid status, positive amounts, live dots */
+  --portal-alert: #d97706;          /* 6. Warm Amber — overdue bills, service warnings, in-progress */
+  --portal-amber-pill: #f5edd3;     /* Tinted pill bg for WCAG contrast */
+
+  --portal-border: transparent;
   --portal-radius: 24px;
   --portal-radius-sm: 14px;
-  --portal-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.05), 0 8px 10px -6px rgba(15, 23, 42, 0.03);
-  --portal-shadow-lg: 0 20px 35px -10px rgba(2, 132, 199, 0.18);
+  --portal-shadow: 0 10px 25px -5px rgba(16, 32, 51, 0.06), 0 8px 10px -6px rgba(16, 32, 51, 0.04);
+  --portal-shadow-lg: 0 20px 35px -10px rgba(2, 132, 199, 0.22);
 }
 
 /* Base Viewport */
@@ -468,11 +473,11 @@
 
 .cp-notice-btn {
   width: 100%;
-  background: #bae6fd;
-  color: #0369a1;
+  background: var(--portal-primary, #0284c7);
+  color: #ffffff !important;
   border: none;
   border-radius: 12px;
-  padding: 10px 14px;
+  padding: 12px 16px;
   font-size: 13px;
   font-weight: 700;
   display: flex;
@@ -481,9 +486,11 @@
   gap: 6px;
   cursor: pointer;
   transition: all 0.15s;
+  box-shadow: 0 4px 12px rgba(2, 132, 199, 0.25);
 }
 .cp-notice-btn:hover {
-  background: #7dd3fc;
+  background: var(--portal-primary-hover, #0369a1);
+  color: #ffffff !important;
 }
 
 /* History Transaksi (Activity List Card) */
@@ -691,6 +698,26 @@
   justify-content: center;
   padding: 16px 12px 0;
   animation: cpFadeIn 0.2s ease;
+}
+
+.cp-modal-backdrop.cp-payment-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  padding: 18px 16px;
+  overflow-y: auto;
+  pointer-events: auto;
+}
+
+.cp-payment-modal .cp-modal-sheet {
+  width: 100%;
+  max-width: 440px;
+  max-height: calc(100dvh - 36px);
+}
+
+.cp-payment-modal .cp-modal-sheet,
+.cp-payment-modal .cp-modal-sheet * {
+  pointer-events: auto;
 }
 
 @keyframes cpFadeIn {
@@ -925,28 +952,35 @@
 .cp-nav-item:focus-visible { outline: 3px solid rgba(8, 132, 170, 0.35); outline-offset: 3px; }
 .cp-icon-circle { border-radius: 50%; box-shadow: var(--portal-inset-shadow); }
 .cp-action-btn:hover .cp-icon-circle { box-shadow: var(--portal-soft-shadow-sm); }
-.bg-soft-blue { background: #dceff4; color: #087fba; }
-.bg-soft-cyan { background: #d9f3ee; color: #087fba; }
-.bg-soft-orange { background: #f6e8d9; color: #b86825; }
-.bg-soft-emerald { background: #dcefe3; color: #16805d; }
-.bg-soft-amber { background: #f5edd3; color: #a87517; }
-.bg-soft-purple { background: #e9e1f1; color: #77538f; }
-.bg-soft-slate { background: #dfe8eb; color: #526b76; }
-.bg-soft-rose { background: #f3dfe1; color: #ad5261; }
+.bg-soft-blue { background: #e0f2fe; color: #0284c7; }
+.bg-soft-cyan { background: #e0f2fe; color: #38bdf8; }
+.bg-soft-orange { background: #fef3c7; color: #d97706; }
+.bg-soft-emerald { background: #ccfbf1; color: #0d9488; }
+.bg-soft-amber { background: #f5edd3; color: #d97706; }
+.bg-soft-purple { background: #f1f5f9; color: #0284c7; }
+.bg-soft-slate { background: #e2e8f0; color: #617286; }
+.bg-soft-rose { background: #f5edd3; color: #d97706; }
 
 .cp-notice-icon-circle { background: var(--portal-primary); box-shadow: var(--portal-soft-shadow-sm); }
 .cp-notice-btn,
 .cp-btn-view-all,
-.cp-btn-primary { background: var(--portal-primary); box-shadow: var(--portal-soft-shadow-sm); }
+.cp-btn-primary { 
+  background: var(--portal-primary); 
+  color: #ffffff !important;
+  box-shadow: var(--portal-soft-shadow-sm); 
+}
 .cp-notice-btn:hover,
 .cp-btn-view-all:hover,
-.cp-btn-primary:hover { background: var(--portal-primary-hover); }
+.cp-btn-primary:hover { 
+  background: var(--portal-primary-hover); 
+  color: #ffffff !important;
+}
 .cp-history-badge { background: var(--portal-bg); box-shadow: var(--portal-inset-shadow); }
 .cp-tx-item { border-bottom-color: rgba(163, 181, 190, 0.2); }
 .cp-tx-icon-circle { box-shadow: var(--portal-inset-shadow); }
-.tx-out { background: #f3dfe1; }
-.tx-in { background: #dcefe3; }
-.tx-service { background: #f5edd3; }
+.tx-out { background: #f5edd3; color: #d97706; }
+.tx-in { background: #ccfbf1; color: #0d9488; }
+.tx-service { background: #f5edd3; color: #d97706; }
 
 .cp-bottom-nav { background: var(--portal-bg); border-top: 0; box-shadow: 0 -8px 18px rgba(163, 181, 190, 0.18); }
 .cp-nav-center-btn { background: var(--portal-primary); border: 5px solid var(--portal-bg); box-shadow: var(--portal-soft-shadow-sm); }

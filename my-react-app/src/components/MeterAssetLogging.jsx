@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { calculateConsumptionBill, initialTariff } from '../data/mockData'
+import { calculateConsumptionBill } from '../data/mockData'
 
 export default function MeterAssetLogging({
   meters,
@@ -9,14 +9,17 @@ export default function MeterAssetLogging({
   pendingMeterReadings = [],
   onUpdateMeter,
   onAddMeter,
+  onDeleteMeter,
   onRecordMeterReading,
   onConfirmMeterReading,
+  onRejectMeterReading,
   initialSearch = '',
   clusterBoundaries = [],
   flash,
 }) {
   const isFieldStaff = currentUser?.role === 'Field Staffs'
   const isOfficeStaff = currentUser?.role === 'Office Staffs'
+  const canRemoveMeter = ['President', 'Administrator'].includes(currentUser?.role)
 
   // Derive zones from actual data
   const allZones = Array.from(new Set([
@@ -54,19 +57,18 @@ export default function MeterAssetLogging({
   const getReadingPreview = (reading) => {
     const calculation = calculateConsumptionBill(
       reading.previousReading,
-      reading.currentReading,
-      reading.classification || 'Residential',
-      initialTariff
+      reading.currentReading
     )
     const overdueBill = bills.find((bill) => bill.consumerId === reading.consumerId && bill.status === 'Overdue')
     const penalty = overdueBill ? +((overdueBill.baseAmount + overdueBill.arrears) * 0.1).toFixed(2) : 0
     return { ...calculation, penalty, totalAmount: +(calculation.totalAmount + penalty).toFixed(2) }
   }
 
-  const handleConfirmReading = () => {
+  const handleConfirmReading = async () => {
     if (!reviewReading) return
     const preview = getReadingPreview(reviewReading)
-    onConfirmMeterReading(reviewReading, preview)
+    const approved = await onConfirmMeterReading(reviewReading, preview)
+    if (!approved) return
     setReviewReading(null)
     setConfirmedReceipt({ reading: reviewReading, ...preview })
   }
@@ -111,7 +113,7 @@ export default function MeterAssetLogging({
     const consumer = consumers.find((item) => item.id === selectedMeter.consumerId)
     const previousReading = Number(consumer?.lastReading || 0)
     const currentReading = Number(presentReading)
-    if (!Number.isFinite(currentReading) || currentReading < previousReading) {
+    if (presentReading.trim() === '' || !Number.isFinite(currentReading) || currentReading < previousReading) {
       flash(`Reading must be at least the previous reading of ${previousReading} m³.`)
       return
     }
@@ -174,28 +176,37 @@ export default function MeterAssetLogging({
         </div>
       </div>
 
-      {isOfficeStaff && pendingMeterReadings.length > 0 && (
+      {isOfficeStaff && (
         <div className="table-card" style={{ marginBottom: '20px', padding: '16px' }}>
           <div className="card-title-bar">
-            <h3>Pending Consumption Confirmations</h3>
+            <h3>Pending Consumption Approvals</h3>
             <span className="badge-live">{pendingMeterReadings.length} Awaiting Review</span>
           </div>
-          <div className="table-responsive">
-            <table className="custom-table">
-              <thead><tr><th>Consumer</th><th>Meter</th><th>Previous → Current</th><th>Recorded</th><th>Action</th></tr></thead>
-              <tbody>
-                {pendingMeterReadings.map((reading) => (
-                  <tr key={reading.id}>
-                    <td><strong>{reading.consumerName}</strong><small className="muted d-block">{reading.accountNo}</small></td>
-                    <td>{reading.meterSerial}</td>
-                    <td>{reading.previousReading} → {reading.currentReading} m³</td>
-                    <td>{reading.recordedAt}</td>
-                    <td><button className="primary-button" onClick={() => setReviewReading(reading)}>Review Bill</button></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          {pendingMeterReadings.length > 0 ? (
+            <div className="table-responsive">
+              <table className="custom-table">
+                <thead><tr><th>Consumer</th><th>Meter</th><th>Previous → Current</th><th>Recorded</th><th>Action</th></tr></thead>
+                <tbody>
+                  {pendingMeterReadings.map((reading) => (
+                    <tr key={reading.id}>
+                      <td><strong>{reading.consumerName}</strong><small className="muted d-block">{reading.accountNo}</small></td>
+                      <td>{reading.meterSerial}</td>
+                      <td>{reading.previousReading} → {reading.currentReading} m³</td>
+                      <td>{reading.recordedAt}</td>
+                      <td>
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                          <button className="primary-button" onClick={() => setReviewReading(reading)}>Review</button>
+                          <button className="btn-secondary" onClick={() => onRejectMeterReading(reading)}>Reject</button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <p className="muted" role="status">No meter readings are waiting for approval.</p>
+          )}
         </div>
       )}
 
@@ -205,8 +216,8 @@ export default function MeterAssetLogging({
             <button className="modal-close" onClick={() => setReviewReading(null)}>×</button>
             <div className="modal-title-wrap">
               <p className="eyebrow">OFFICE STAFF REVIEW</p>
-              <h2>Confirm Meter Reading & Bill</h2>
-              <p className="modal-copy">Check the field reading and billing receipt before confirming it for the consumer.</p>
+              <h2>Approve Meter Reading & Bill</h2>
+              <p className="modal-copy">Review the recorded reading and calculated charges. Approval updates the official consumer reading and creates the bill.</p>
             </div>
             {(() => {
               const preview = getReadingPreview(reviewReading)
@@ -227,7 +238,7 @@ export default function MeterAssetLogging({
             })()}
             <div className="modal-action-bar">
               <button className="btn-secondary" onClick={() => setReviewReading(null)}>Cancel</button>
-              <button className="primary-button" onClick={handleConfirmReading}>Confirm & Calculate Bill</button>
+              <button className="primary-button" onClick={handleConfirmReading}>Approve Reading & Create Bill</button>
             </div>
           </div>
         </div>
@@ -374,6 +385,19 @@ export default function MeterAssetLogging({
                     Record Consumption
                   </button>
                 )}
+                {canRemoveMeter && (
+                  <button
+                    className="btn-outline-sm btn-danger"
+                    style={{ minHeight: '38px', justifyContent: 'center' }}
+                    onClick={() => {
+                      if (window.confirm(`Remove meter asset ${m.serialNo} (${m.brand} ${m.model})? This permanently deletes the meter and its calibration history.`)) {
+                        if (onDeleteMeter) onDeleteMeter(m)
+                      }
+                    }}
+                  >
+                    Remove
+                  </button>
+                )}
               </div>
             </div>
           ))}
@@ -466,6 +490,18 @@ export default function MeterAssetLogging({
                           Record Consumption
                         </button>
                       )}
+                      {canRemoveMeter && (
+                        <button
+                          className="btn-outline-sm btn-danger"
+                          onClick={() => {
+                            if (window.confirm(`Remove meter asset ${m.serialNo} (${m.brand} ${m.model})? This permanently deletes the meter and its calibration history.`)) {
+                              if (onDeleteMeter) onDeleteMeter(m)
+                            }
+                          }}
+                        >
+                          Remove
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>
@@ -528,6 +564,20 @@ export default function MeterAssetLogging({
                   }}
                 >
                   Record Consumption
+                </button>
+              )}
+              {canRemoveMeter && (
+                <button
+                  className="btn-secondary"
+                  style={{ color: '#dc2626', borderColor: '#fca5a5', background: '#fef2f2' }}
+                  onClick={() => {
+                    if (window.confirm(`Remove meter asset ${selectedMeter.serialNo} (${selectedMeter.brand} ${selectedMeter.model})? This permanently deletes the meter and its calibration history.`)) {
+                      if (onDeleteMeter) onDeleteMeter(selectedMeter)
+                      setSelectedMeter(null)
+                    }
+                  }}
+                >
+                  Remove Meter Asset
                 </button>
               )}
               <button className="primary-button" onClick={() => setSelectedMeter(null)}>

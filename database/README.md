@@ -13,14 +13,26 @@ A production-ready relational database schema designed for municipal water utili
 - **Default Password**: *(blank by default in XAMPP)*
 - **GUI Access**: Open browser to [http://localhost/phpmyadmin](http://localhost/phpmyadmin) and select `waterline_db`.
 
+## PayMongo Live Payments and Payouts
+
+PayMongo checkout uses the server-side `PAYMONGO_SECRET_KEY` environment variable. Do not put the secret key in React code or commit it to the repository.
+
+- A key beginning with `sk_test_` creates test transactions only. They do not move real funds and never appear in payouts.
+- A key beginning with `sk_live_` creates live transactions. To receive payouts, the PayMongo account must also be activated and have a verified payout destination and settlement schedule.
+- In Windows, set `PAYMONGO_SECRET_KEY` in the environment available to Apache, then restart Apache from the XAMPP Control Panel. Use a live secret key from the PayMongo Dashboard for real payments. Keep it private.
+- The checkout confirmation in the consumer portal explicitly warns when a test-mode checkout is used.
+
+The application records confirmed payments in its own bill ledger. Payout timing and destination are managed by PayMongo; recording a bill payment does not itself create or accelerate a payout.
+
 ---
 
 ## 📂 File Manifest
 
 | File | Purpose |
 |------|---------|
-| [`schema.sql`](file:///c:/Users/User/Desktop/SIA/database/schema.sql) | Complete DDL script creating all 10 tables, indexes, constraints, and foreign keys. |
+| [`schema.sql`](file:///c:/Users/User/Desktop/SIA/database/schema.sql) | Complete DDL script creating the application tables, indexes, constraints, and foreign keys. |
 | [`seed.sql`](file:///c:/Users/User/Desktop/SIA/database/seed.sql) | Initial dataset including users, consumer profiles, meter assets, sample bills, POS receipts, tickets, and audit trails. |
+| `migration_remove_tariff_rates_table.sql` | Drops the obsolete tariff configuration table; billing uses fixed rates in the application. |
 | [`migration_centralized_boundaries.sql`](file:///c:/Users/User/Desktop/SIA/database/migration_centralized_boundaries.sql) | Adds shared service/cluster polygons and permits President-created zone names. |
 
 ---
@@ -87,18 +99,9 @@ Coordinates and status markers for spatial GIS mapping and dispatch.
 - `x_coordinate`, `y_coordinate`: Cadastral / GIS map coordinates
 - `status`: `Normal`, `Overdue`, `Maintenance`
 
-### 6. `tariff_rates` (Tariff Brackets Engine)
-Codified tariff pricing rules for automatic usage calculations.
-- `classification`: `Residential`, `Commercial`, `Institutional`
-- `min_charge`: Base fee for the first 10 m³
-- `bracket_1_rate`: Rate per m³ for 11–20 m³
-- `bracket_2_rate`: Rate per m³ for 21–30 m³
-- `bracket_3_rate`: Rate per m³ for 31+ m³
-- `environmental_fee_rate`: Environmental surcharge (e.g. 0.10 = 10%)
-- `meter_maintenance_fee`: Fixed monthly maintenance charge (₱ 25.00)
-- `overdue_penalty_rate`: Statutory late surcharge rate (0.10 = 10%)
+Billing uses fixed rules: ₱10 per m³, 10% environmental fee, ₱2 maintenance fee, and a 10% overdue penalty.
 
-### 7. `bills` (Billing Statements Ledger)
+### 6. `bills` (Billing Statements Ledger)
 Multi-account verified billing runs and statement history.
 - `id`: Primary key
 - `bill_no`: Statement ID (e.g. `WS-240981`)
@@ -115,7 +118,7 @@ Multi-account verified billing runs and statement history.
 - `status`: `Ready`, `Overdue`, `Paid`, `Disputed`
 - `due_date`, `paid_date`, `days_overdue`
 
-### 8. `payments` (P.O.S. Counter Receipts)
+### 7. `payments` (P.O.S. Counter Receipts)
 Counter cash collections with instant serialized official receipts.
 - `id`: Primary key
 - `or_number`: Official Receipt number (e.g. `OR-2026-9042`)
@@ -128,7 +131,7 @@ Counter cash collections with instant serialized official receipts.
 - `payment_method`: `Cash`, `GCash`, `Maya`, `Bank Transfer`
 - `payment_date`: Timestamp of payment
 
-### 9. `maintenance_tickets` (Service Desk & Complaints)
+### 8. `maintenance_tickets` (Service Desk & Complaints)
 Consumer support requests, work orders, and field repair logs.
 - `id`: Primary key
 - `ticket_no`: Ticket ID (e.g. `SR-2026-0182`)
@@ -143,7 +146,7 @@ Consumer support requests, work orders, and field repair logs.
 - `description`: Consumer complaint description
 - `resolution_notes`: Work done, materials used, and sign-off
 
-### 10. `audit_trail` (Operational Security Ledger)
+### 9. `audit_trail` (Operational Security Ledger)
 Comprehensive immutable audit log of operator actions.
 - `id`: Primary key
 - `log_code`: Audit event ID (e.g. `AUD-901`)

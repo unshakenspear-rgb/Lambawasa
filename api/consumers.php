@@ -4,6 +4,12 @@ require_once __DIR__ . '/db.php';
 $pdo = getDBConnection();
 $method = $_SERVER['REQUEST_METHOD'];
 
+// Self-service registrations store the contact email on the consumer row.
+// Keep this compatible with existing XAMPP databases that predate the column.
+try {
+    $pdo->exec("ALTER TABLE consumers ADD COLUMN email VARCHAR(255) DEFAULT NULL");
+} catch (Throwable $ignored) {}
+
 if ($method === 'DELETE') {
     $input = getJsonInput();
     $consumerCode = trim($input['consumerId'] ?? $input['id'] ?? '');
@@ -61,7 +67,8 @@ if ($method === 'POST') {
     $name = trim($input['name'] ?? '');
     $accountNo = trim($input['accountNo'] ?? '');
     $username = trim(strtolower($input['username'] ?? ''));
-    $contact = trim($input['contact'] ?? '');
+    $email = trim(strtolower($input['email'] ?? ''));
+    $contact = trim((string)($input['contact'] ?? ''));
     $address = trim($input['address'] ?? '');
     $zone = trim($input['zone'] ?? '');
     $classification = $input['classification'] ?? 'Residential';
@@ -71,8 +78,8 @@ if ($method === 'POST') {
     $status = ($input['status'] ?? 'Active') === 'Pending Approval' ? 'Pending' : ($input['status'] ?? 'Active');
     $approvalStatus = $input['approvalStatus'] ?? ($status === 'Pending' ? 'Pending' : 'Approved');
 
-    if (empty($name) || empty($accountNo) || empty($zone)) {
-        sendJsonResponse(['success' => false, 'error' => 'Name, Account No, and a selected zone or cluster are required.'], 400);
+    if (empty($name) || empty($accountNo) || empty($zone) || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        sendJsonResponse(['success' => false, 'error' => 'Name, account, zone, and a valid email address are required.'], 400);
     }
 
     try {
@@ -92,13 +99,14 @@ if ($method === 'POST') {
         }
 
         $insConsumer = $pdo->prepare("
-            INSERT INTO consumers (consumer_code, account_no, username, full_name, contact_no, service_address, zone, classification, meter_serial, status, approval_status, connection_date, last_reading)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO consumers (consumer_code, account_no, username, email, full_name, contact_no, service_address, zone, classification, meter_serial, status, approval_status, connection_date, last_reading)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ");
         $insConsumer->execute([
             $consumerCode,
             $accountNo,
             $username ?: null,
+            $email,
             $name,
             $contact,
             $address,
@@ -198,8 +206,8 @@ if ($method === 'POST') {
                 'lastReading' => $lastReading,
             ]
         ], 201);
-    } catch (Exception $e) {
-        $pdo->rollBack();
+    } catch (Throwable $e) {
+        if ($pdo->inTransaction()) $pdo->rollBack();
         sendJsonResponse(['success' => false, 'error' => $e->getMessage()], 500);
     }
 }
@@ -208,6 +216,67 @@ if ($method === 'PUT') {
     $input = getJsonInput();
     $consumerCode = trim($input['consumerId'] ?? $input['id'] ?? '');
     $action = $input['action'] ?? 'approval';
+
+    if ($action === 'profile-update') {
+        $contact = trim($input['contact'] ?? $input['contactNo'] ?? '');
+        $email = trim(strtolower($input['email'] ?? ''));
+        $password = trim($input['password'] ?? '');
+
+        if ($consumerCode === '') {
+            sendJsonResponse(['success' => false, 'error' => 'Consumer identifier is required.'], 400);
+        }
+
+        $fields = [];
+        $params = [];
+
+        if ($contact !== '') {
+            $fields[] = 'contact_no = ?';
+            $params[] = $contact;
+        }
+        if ($email !== '') {
+            $fields[] = 'email = ?';
+            $params[] = $email;
+        }
+        if (isset($input['lastReading'])) {
+            $fields[] = 'last_reading = ?';
+            $params[] = (float)$input['lastReading'];
+        }
+
+        if (!empty($fields)) {
+            $params[] = $consumerCode;
+            $params[] = $consumerCode;
+            $stmt = $pdo->prepare('UPDATE consumers SET ' . implode(', ', $fields) . ' WHERE consumer_code = ? OR account_no = ?');
+            $stmt->execute($params);
+        }
+
+        // Also update users table if consumer user exists
+        $userFields = [];
+        $userParams = [];
+        if ($contact !== '') {
+            $userFields[] = 'contact_no = ?';
+            $userParams[] = $contact;
+        }
+        if ($email !== '') {
+            $userFields[] = 'email = ?';
+            $userParams[] = $email;
+        }
+        if (!empty($password)) {
+            $userFields[] = 'password_hash = ?';
+            $userParams[] = password_hash($password, PASSWORD_BCRYPT);
+        }
+
+        if (!empty($userFields)) {
+            $accountNo = trim($input['accountNo'] ?? '');
+            $username = trim($input['username'] ?? '');
+            $userParams[] = $consumerCode;
+            $userParams[] = $accountNo ?: $consumerCode;
+            $userParams[] = $username ?: $consumerCode;
+            $userStmt = $pdo->prepare('UPDATE users SET ' . implode(', ', $userFields) . ' WHERE account_no = ? OR username = ? OR id = ?');
+            $userStmt->execute($userParams);
+        }
+
+        sendJsonResponse(['success' => true, 'message' => 'Profile updated successfully.']);
+    }
 
     if ($action === 'location-request') {
         $latitude = (float)($input['latitude'] ?? 0);

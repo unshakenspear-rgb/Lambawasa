@@ -97,6 +97,20 @@ export const api = {
     }
   },
 
+  async updateConsumerProfile(profileData) {
+    try {
+      const res = await fetch(getApiUrl('consumers.php'), {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'profile-update', ...profileData }),
+      })
+      return await res.json()
+    } catch (err) {
+      console.error('API updateConsumerProfile error:', err)
+      return { success: false, error: err.message }
+    }
+  },
+
   async requestConsumerLocationChange(consumerId, latitude, longitude) {
     try {
       const res = await fetch(getApiUrl('consumers.php'), {
@@ -140,6 +154,54 @@ export const api = {
     }
   },
 
+  // Create PayMongo Checkout Session
+  async getPaymongoConfig() {
+    try {
+      const res = await fetch(getApiUrl('paymongo.php?action=config'))
+      return await res.json()
+    } catch (err) {
+      console.error('API getPaymongoConfig error:', err)
+      return { success: false, configured: false, error: err.message }
+    }
+  },
+
+  async createPaymongoCheckout(checkoutData) {
+    try {
+      const res = await fetch(getApiUrl('paymongo.php?action=create-checkout'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(checkoutData),
+      })
+      return await res.json()
+    } catch (err) {
+      console.error('API createPaymongoCheckout error:', err)
+      return { success: false, error: err.message }
+    }
+  },
+
+  // Verify PayMongo Checkout Session
+  async verifyPaymongoSession(sessionId) {
+    const controller = new AbortController()
+    const timeoutId = window.setTimeout(() => controller.abort(), 20000)
+    try {
+      const res = await fetch(
+        getApiUrl(`paymongo.php?action=verify&session_id=${encodeURIComponent(sessionId)}`),
+        { signal: controller.signal }
+      )
+      return await res.json()
+    } catch (err) {
+      console.error('API verifyPaymongoSession error:', err)
+      return {
+        success: false,
+        error: err.name === 'AbortError'
+          ? 'PayMongo verification timed out. Please tap Verify & Complete to try again.'
+          : err.message,
+      }
+    } finally {
+      window.clearTimeout(timeoutId)
+    }
+  },
+
   // Queue Bill
   async queueBill(billData) {
     try {
@@ -151,6 +213,92 @@ export const api = {
       return await res.json()
     } catch (err) {
       console.error('API queueBill error:', err)
+      return { success: false, error: err.message }
+    }
+  },
+
+  async deleteBill(billId, actorName, actorRole) {
+    try {
+      const res = await fetch(getApiUrl('bills.php'), {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ billId, actorName, actorRole }),
+      })
+      const result = await res.json()
+      if (!res.ok && result.success) {
+        return { success: false, error: `HTTP ${res.status}` }
+      }
+      return result
+    } catch (err) {
+      console.error('API deleteBill error:', err)
+      return { success: false, error: err.message }
+    }
+  },
+
+  async updateBillArrears(adjustment) {
+    try {
+      const res = await fetch(getApiUrl('bills.php'), {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(adjustment),
+      })
+      return await res.json()
+    } catch (err) {
+      console.error('API updateBillArrears error:', err)
+      return { success: false, error: err.message }
+    }
+  },
+
+  async submitMeterReading(reading) {
+    try {
+      const res = await fetch(getApiUrl('meter_readings.php'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(reading),
+      })
+      const result = await res.json()
+      if (!res.ok && result.success) {
+        return { success: false, error: `HTTP ${res.status}` }
+      }
+      return result
+    } catch (err) {
+      console.error('API submitMeterReading error:', err)
+      return { success: false, error: err.message }
+    }
+  },
+
+  async correctMeterReading(reading) {
+    try {
+      const res = await fetch(getApiUrl('meter_readings.php'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'president-correction', ...reading }),
+      })
+      const result = await res.json()
+      if (!res.ok && result.success) {
+        return { success: false, error: `HTTP ${res.status}` }
+      }
+      return result
+    } catch (err) {
+      console.error('API correctMeterReading error:', err)
+      return { success: false, error: err.message }
+    }
+  },
+
+  async decideMeterReading(readingId, decision, actorName, actorRole, bill = null) {
+    try {
+      const res = await fetch(getApiUrl('meter_readings.php'), {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ readingId, decision, actorName, actorRole, bill }),
+      })
+      const result = await res.json()
+      if (!res.ok && result.success) {
+        return { success: false, error: `HTTP ${res.status}` }
+      }
+      return result
+    } catch (err) {
+      console.error('API decideMeterReading error:', err)
       return { success: false, error: err.message }
     }
   },
@@ -240,6 +388,21 @@ export const api = {
     }
   },
 
+  // Delete Meter Asset
+  async deleteMeter(serialNo, actorRole) {
+    try {
+      const res = await fetch(getApiUrl('meters.php'), {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ serialNo, actorRole }),
+      })
+      return await res.json()
+    } catch (err) {
+      console.error('API deleteMeter error:', err)
+      return { success: false, error: err.message }
+    }
+  },
+
   // Record Audit Trail
   async recordAudit(auditData) {
     try {
@@ -298,4 +461,7 @@ export const api = {
       return { success: false, error: err.message }
     }
   },
+
 }
+
+export default api

@@ -3,16 +3,11 @@ import DatabaseStatusBadge from './DatabaseStatusBadge'
 
 export default function LandingPage({ onOpenLogin, onOpenRegister, onQuickExplore, flash, dbStatus, onSync, isSyncing, consumerOnly = false }) {
   const [calculatorUsage, setCalculatorUsage] = useState(18)
-  const [calculatorClass, setCalculatorClass] = useState('Residential')
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 
-  // Interactive tariff calculator for the landing page
-  const minCharge = calculatorClass === 'Commercial' ? 360.0 : 180.0
-  const excessRate = calculatorClass === 'Commercial' ? 42.0 : 22.5
-  const excessUsage = Math.max(0, calculatorUsage - 10)
-  const baseBill = minCharge + excessUsage * excessRate
+  const baseBill = calculatorUsage * 10
   const envFee = +(baseBill * 0.1).toFixed(2)
-  const maintFee = 25.0
+  const maintFee = 2.0
   const estimatedTotal = +(baseBill + envFee + maintFee).toFixed(2)
 
   const featureCards = [
@@ -40,7 +35,7 @@ export default function LandingPage({ onOpenLogin, onOpenRegister, onQuickExplor
     {
       num: '04',
       title: 'Automated Consumption Calculator',
-      desc: 'Codified tiered tariff engine computing precise household usage automatically with dial inversion and usage spike anomaly detection.',
+      desc: 'Applies the fixed ₱10 per m³ consumption rate and flags dial inversion or unusual usage.',
       tag: 'Math Engine',
       icon: '🧮',
     },
@@ -115,7 +110,7 @@ export default function LandingPage({ onOpenLogin, onOpenRegister, onQuickExplor
             <div className="landing-nav-links" role="navigation">
               <button onClick={() => { scrollToSection('features-section'); setMobileMenuOpen(false) }}>Features</button>
               <button onClick={() => { scrollToSection('gis-section'); setMobileMenuOpen(false) }}>Google GIS</button>
-              <button onClick={() => { scrollToSection('tariff-section'); setMobileMenuOpen(false) }}>Tariff Rates</button>
+              <button onClick={() => { scrollToSection('billing-estimate-section'); setMobileMenuOpen(false) }}>Billing Estimate</button>
               <button onClick={() => { scrollToSection('service-section'); setMobileMenuOpen(false) }}>Support & Hotline</button>
             </div>
           )}
@@ -248,52 +243,31 @@ export default function LandingPage({ onOpenLogin, onOpenRegister, onQuickExplor
         </div>
       </section>
 
-      {/* Interactive Public Tariff Calculator */}
-      <section className="landing-section bg-alt" id="tariff-section">
-        <div className="tariff-showcase-container">
-          <div className="tariff-left-copy">
+      {/* Fixed-rate public bill estimator */}
+      <section className="landing-section bg-alt" id="billing-estimate-section">
+        <div className="billing-estimate-container">
+          <div className="billing-estimate-copy">
             <span className="section-eyebrow">TRANSPARENT CONSUMER BILLING</span>
             <h2>Estimate Monthly Household Consumption</h2>
             <p>
-              Under our Automated Consumption Calculator, every drop is computed using codified tiered tariffs. Experience transparent billing arithmetic with zero hidden fees.
+              Bills use a fixed ₱10 per m³ usage rate, plus the 10% environmental fee and ₱2 maintenance charge.
             </p>
 
-            <div className="tariff-brackets-table">
-              <h4>Approved District Tariff Schedule:</h4>
+            <div className="billing-estimate-breakdown">
+              <h4>How the estimate is calculated:</h4>
               <ul>
-                <li><span>First 10 m³ (Minimum Base):</span> <strong>₱ 180.00</strong></li>
-                <li><span>11 to 20 m³:</span> <strong>₱ 22.50 / m³</strong></li>
-                <li><span>21 to 30 m³:</span> <strong>₱ 28.00 / m³</strong></li>
-                <li><span>Over 30 m³:</span> <strong>₱ 35.00 / m³</strong></li>
+                <li><span>Water consumption:</span> <strong>₱10 per m³</strong></li>
                 <li><span>Environmental Sewerage Fee:</span> <strong>10% of base</strong></li>
-                <li><span>Meter Maintenance Fee:</span> <strong>₱ 25.00 fixed</strong></li>
+                <li><span>Meter Maintenance Fee:</span> <strong>₱2 fixed</strong></li>
               </ul>
             </div>
           </div>
 
-          <div className="tariff-interactive-card">
+          <div className="billing-estimate-card">
             <h3>Interactive Usage Calculator</h3>
             <p className="calculator-intro">Adjust your expected monthly water usage volume:</p>
 
-            <label className="tariff-field-label">Rate Classification:</label>
-            <div className="tariff-radio-group">
-              <button
-                type="button"
-                className={calculatorClass === 'Residential' ? 'active' : ''}
-                onClick={() => setCalculatorClass('Residential')}
-              >
-                Residential
-              </button>
-              <button
-                type="button"
-                className={calculatorClass === 'Commercial' ? 'active' : ''}
-                onClick={() => setCalculatorClass('Commercial')}
-              >
-                Commercial
-              </button>
-            </div>
-
-            <label className="tariff-field-label">
+            <label className="billing-estimate-label">
               Monthly Usage: <strong>{calculatorUsage} m³</strong> ({calculatorUsage * 1000} Liters)
             </label>
             <input
@@ -305,7 +279,7 @@ export default function LandingPage({ onOpenLogin, onOpenRegister, onQuickExplor
               className="usage-slider"
             />
 
-            <div className="tariff-output-box">
+            <div className="billing-estimate-output">
               <div className="output-row">
                 <span>Base Commodity Rate:</span>
                 <strong>₱ {baseBill.toFixed(2)}</strong>

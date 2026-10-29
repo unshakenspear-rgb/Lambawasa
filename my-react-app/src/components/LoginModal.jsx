@@ -1,6 +1,20 @@
 import React, { useState, useEffect } from 'react'
 import './LoginModal.css'
 import { api } from '../services/api'
+import {
+  HardHat,
+  Building2,
+  Crown,
+  Banknote,
+  Droplet,
+  IdCard,
+  Lock,
+  MapPin,
+  ArrowRight,
+  X,
+  AlertTriangle,
+  User,
+} from 'lucide-react'
 
 export default function LoginModal({
   isOpen,
@@ -238,14 +252,24 @@ export default function LoginModal({
           onClick={onClose}
           aria-label="Close dialog"
         >
-          ✕
+          <X size={18} />
         </button>
 
         {/* Header Branding */}
         <div className="mobile-login-banner">
           <div className="mobile-login-brand">
             <div className="mobile-login-logo">
-              {authMode === 'consumer' ? '💧' : authMode === 'field' ? '👷' : '🏢'}
+              {authMode === 'consumer' ? (
+                <Droplet size={20} />
+              ) : authMode === 'field' ? (
+                <HardHat size={20} />
+              ) : staffRolePreset === 'president' ? (
+                <Crown size={20} />
+              ) : staffRolePreset === 'cashier' ? (
+                <Banknote size={20} />
+              ) : (
+                <Building2 size={20} />
+              )}
             </div>
             <div className="mobile-login-titles">
               <h2>
@@ -253,6 +277,10 @@ export default function LoginModal({
                   ? 'Household Consumer'
                   : authMode === 'field'
                   ? 'Field Staff Terminal'
+                  : staffRolePreset === 'president'
+                  ? 'President Suite'
+                  : staffRolePreset === 'cashier'
+                  ? 'Cashier Counter POS'
                   : 'Operations & Office'}
               </h2>
               <p>
@@ -273,28 +301,28 @@ export default function LoginModal({
               className={`mobile-role-tab ${authMode === 'field' ? 'active tab-field' : ''}`}
               onClick={() => handleSwitchTab('field', 'field')}
             >
-              <span>👷</span> Field Staff
+              <HardHat size={14} /> Field Staff
             </button>
             {!consumerAndFieldOnly && <button
               type="button"
               className={`mobile-role-tab ${authMode === 'admin' && staffRolePreset === 'office' ? 'active tab-admin' : ''}`}
               onClick={() => handleSwitchTab('admin', 'office')}
             >
-              <span>🏢</span> Office Staff
+              <Building2 size={14} /> Office Staff
             </button>}
             {!consumerAndFieldOnly && <button
               type="button"
               className={`mobile-role-tab ${authMode === 'admin' && staffRolePreset === 'president' ? 'active tab-admin' : ''}`}
               onClick={() => handleSwitchTab('admin', 'president')}
             >
-              <span>👑</span> President
+              <Crown size={14} /> President
             </button>}
             {!consumerAndFieldOnly && <button
               type="button"
               className={`mobile-role-tab ${authMode === 'admin' && staffRolePreset === 'cashier' ? 'active tab-admin' : ''}`}
               onClick={() => handleSwitchTab('admin', 'cashier')}
             >
-              <span>💵</span> Cashier
+              <Banknote size={14} /> Cashier
             </button>}
           </div>
           )}
@@ -302,7 +330,11 @@ export default function LoginModal({
 
         {/* Scrollable Form Body */}
         <form onSubmit={handleSubmit} className="mobile-login-body">
-          {error && <div className="mobile-error-pill">⚠️ {error}</div>}
+          {error && (
+            <div className="mobile-error-pill">
+              <AlertTriangle size={15} /> {error}
+            </div>
+          )}
 
           {/* INPUT 1: CONSUMER vs FIELD vs ADMIN */}
           <div className="mobile-field-group">
@@ -317,7 +349,7 @@ export default function LoginModal({
             </label>
             <div className="mobile-field-input-wrap">
               <span className="mobile-field-icon">
-                {authMode === 'consumer' ? '📄' : authMode === 'field' ? '🆔' : '👤'}
+                {authMode === 'field' ? <IdCard size={18} /> : <User size={18} />}
               </span>
               <input
                 className="mobile-field-input"
@@ -342,7 +374,7 @@ export default function LoginModal({
               <span>{authMode === 'consumer' ? 'Security PIN / Password' : 'Staff Passcode'}</span>
             </label>
             <div className="mobile-field-input-wrap">
-              <span className="mobile-field-icon">🔒</span>
+              <span className="mobile-field-icon"><Lock size={18} /></span>
               <input
                 className="mobile-field-input"
                 type="password"
@@ -360,7 +392,7 @@ export default function LoginModal({
                 <span>Assigned Field District Sector</span>
               </label>
               <div className="mobile-field-input-wrap">
-                <span className="mobile-field-icon">📍</span>
+                <span className="mobile-field-icon"><MapPin size={18} /></span>
                 <select
                   className="mobile-field-select"
                   value={fieldZone}
@@ -382,9 +414,13 @@ export default function LoginModal({
                 ? 'Sign In to Consumer Portal'
                 : authMode === 'field'
                 ? 'Access Field Staff Terminal'
+                : staffRolePreset === 'president'
+                ? 'Enter Executive President Suite'
+                : staffRolePreset === 'cashier'
+                ? 'Open Cashier POS Terminal'
                 : 'Sign In to Operations Suite'}
             </span>
-            <span>→</span>
+            <ArrowRight size={18} />
           </button>
 
           {/* Consumer Registration Link */}

@@ -1,25 +1,5 @@
 // Central Mock Data Store for Utility Management System
 
-export const initialTariff = {
-  residential: {
-    minCharge: 180.00, // first 10 cu.m
-    minCuM: 10,
-    bracket1: 22.50, // 11-20 cu.m
-    bracket2: 28.00, // 21-30 cu.m
-    bracket3: 35.00, // 31+ cu.m
-  },
-  commercial: {
-    minCharge: 360.00, // first 10 cu.m
-    minCuM: 10,
-    bracket1: 42.00,
-    bracket2: 52.00,
-    bracket3: 65.00,
-  },
-  environmentalFeeRate: 0.10, // 10%
-  meterMaintenanceFee: 25.00,
-  overduePenaltyRate: 0.10, // 10% penalty on overdue base
-}
-
 export const initialConsumers = [
   {
     id: 'C-1001',
@@ -594,50 +574,22 @@ export const consumerPortalAccounts = [
 ]
 
 // Consumption calculation utility function
-export function calculateConsumptionBill(prevReading, presReading, classification = 'Residential', tariff = initialTariff) {
+export function calculateConsumptionBill(prevReading, presReading) {
   const prev = Number(prevReading) || 0
   const pres = Number(presReading) || 0
   const consumption = Math.max(0, pres - prev)
-
-  const rates = classification === 'Commercial' ? tariff.commercial : tariff.residential
-  let baseAmount = 0
-  let bracketBreakdown = []
-
-  if (consumption <= rates.minCuM) {
-    baseAmount = rates.minCharge
-    bracketBreakdown.push({ label: `Minimum Charge (0-${rates.minCuM} m³)`, cuM: consumption, rate: rates.minCharge, amount: rates.minCharge })
-  } else {
-    baseAmount = rates.minCharge
-    bracketBreakdown.push({ label: `Minimum Charge (First 10 m³)`, cuM: 10, rate: rates.minCharge, amount: rates.minCharge })
-    
-    let remaining = consumption - 10
-
-    // Bracket 1: 11-20 m³ (max 10 m³)
-    const b1CuM = Math.min(10, remaining)
-    const b1Amount = b1CuM * rates.bracket1
-    baseAmount += b1Amount
-    bracketBreakdown.push({ label: `11 - 20 m³`, cuM: b1CuM, rate: rates.bracket1, amount: b1Amount })
-    remaining -= b1CuM
-
-    // Bracket 2: 21-30 m³ (max 10 m³)
-    if (remaining > 0) {
-      const b2CuM = Math.min(10, remaining)
-      const b2Amount = b2CuM * rates.bracket2
-      baseAmount += b2Amount
-      bracketBreakdown.push({ label: `21 - 30 m³`, cuM: b2CuM, rate: rates.bracket2, amount: b2Amount })
-      remaining -= b2CuM
-    }
-
-    // Bracket 3: 31+ m³
-    if (remaining > 0) {
-      const b3Amount = remaining * rates.bracket3
-      baseAmount += b3Amount
-      bracketBreakdown.push({ label: `Over 30 m³`, cuM: remaining, rate: rates.bracket3, amount: b3Amount })
-    }
+  const baseAmount = +(consumption * 10).toFixed(2)
+  const bracketBreakdown = []
+  if (consumption > 0) {
+    bracketBreakdown.push({
+      label: '₱10 per m³',
+      cuM: consumption,
+      rate: 10,
+      amount: baseAmount,
+    })
   }
-
-  const envFee = +(baseAmount * tariff.environmentalFeeRate).toFixed(2)
-  const maintFee = tariff.meterMaintenanceFee
+  const envFee = +(baseAmount * 0.10).toFixed(2)
+  const maintFee = 2
   const totalAmount = +(baseAmount + envFee + maintFee).toFixed(2)
 
   return {

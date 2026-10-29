@@ -13,13 +13,7 @@ INSERT INTO `users` (`id`, `username`, `password_hash`, `full_name`, `email`, `c
 (4, 'gil.santos', '$2y$10$e8K3zW1QZ1fO9GgVvB.NWe6c/XQ5Cq0fN8.f6E1W8h.rT4a1mGqGy', 'Gil Santos', 'gil.santos@waterline.gov.ph', '+63 920 444 5566', 'Technician', 'Active'),
 (5, 'cashier1', '$2y$10$e8K3zW1QZ1fO9GgVvB.NWe6c/XQ5Cq0fN8.f6E1W8h.rT4a1mGqGy', 'Counter Cashier Alpha', 'cashier1@waterline.gov.ph', '+63 921 555 6677', 'Cashier', 'Active');
 
--- 2. SEED TARIFF CONFIGURATION
-INSERT INTO `tariff_rates` (`id`, `classification`, `min_charge`, `min_cum`, `bracket_1_rate`, `bracket_2_rate`, `bracket_3_rate`, `environmental_fee_rate`, `meter_maintenance_fee`, `overdue_penalty_rate`) VALUES
-(1, 'Residential', 180.00, 10, 22.50, 28.00, 35.00, 0.10, 25.00, 0.10),
-(2, 'Commercial', 360.00, 10, 42.00, 52.00, 65.00, 0.10, 40.00, 0.10),
-(3, 'Institutional', 250.00, 10, 30.00, 38.00, 48.00, 0.10, 30.00, 0.10);
-
--- 3. SEED CONSUMERS (HOUSEHOLD PROFILES)
+-- 2. SEED CONSUMERS (HOUSEHOLD PROFILES)
 INSERT INTO `consumers` (`id`, `consumer_code`, `account_no`, `full_name`, `contact_no`, `service_address`, `zone`, `classification`, `meter_serial`, `status`, `connection_date`, `last_reading`) VALUES
 (1, 'C-1001', 'ACC-88201', 'Amina Okafor', '+63 917 234 5678', 'Block 4 Lot 12, Riverdale Heights', 'Mabuhay', 'Residential', 'MTR-77291', 'Active', '2024-03-15', 148.00),
 (2, 'C-1002', 'ACC-88202', 'Caleb Mensah', '+63 928 345 6789', '15 Magsaysay St., Barangay Riverside', 'Riverside', 'Residential', 'MTR-77292', 'Overdue', '2023-11-20', 215.00),

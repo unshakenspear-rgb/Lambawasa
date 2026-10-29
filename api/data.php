@@ -22,6 +22,7 @@ try {
             'id' => $row['consumer_code'],
             'accountNo' => $row['account_no'],
             'username' => $row['username'] ?? null,
+            'email' => $row['email'] ?? null,
             'name' => $row['full_name'],
             'contact' => $row['contact_no'],
             'address' => $row['service_address'],
@@ -263,41 +264,6 @@ try {
         ];
     }
 
-    // 11. Tariff Rates
-    $tariffRows = $pdo->query("SELECT * FROM tariff_rates")->fetchAll();
-    $tariff = [
-        'residential' => [
-            'minCharge' => 180.00,
-            'minCuM' => 10,
-            'bracket1' => 22.50,
-            'bracket2' => 28.00,
-            'bracket3' => 35.00,
-        ],
-        'commercial' => [
-            'minCharge' => 360.00,
-            'minCuM' => 10,
-            'bracket1' => 42.00,
-            'bracket2' => 52.00,
-            'bracket3' => 65.00,
-        ],
-        'environmentalFeeRate' => 0.10,
-        'meterMaintenanceFee' => 25.00,
-        'overduePenaltyRate' => 0.10,
-    ];
-    foreach ($tariffRows as $tr) {
-        $c = strtolower($tr['classification']);
-        if (isset($tariff[$c])) {
-            $tariff[$c]['minCharge'] = (float)$tr['min_charge'];
-            $tariff[$c]['minCuM'] = (int)$tr['min_cum'];
-            $tariff[$c]['bracket1'] = (float)$tr['bracket_1_rate'];
-            $tariff[$c]['bracket2'] = (float)$tr['bracket_2_rate'];
-            $tariff[$c]['bracket3'] = (float)$tr['bracket_3_rate'];
-        }
-        $tariff['environmentalFeeRate'] = (float)$tr['environmental_fee_rate'];
-        $tariff['meterMaintenanceFee'] = (float)$tr['meter_maintenance_fee'];
-        $tariff['overduePenaltyRate'] = (float)$tr['overdue_penalty_rate'];
-    }
-
     $boundaryRows = $pdo->query("SELECT boundary_key, boundary_data FROM system_boundaries")->fetchAll();
     $boundaries = [
         'serviceBoundary' => null,
@@ -313,6 +279,35 @@ try {
         }
     }
 
+    $readingRows = $pdo->query("
+        SELECT r.*, c.consumer_code, c.account_no, c.full_name, c.zone, b.bill_no
+        FROM meter_readings r
+        JOIN consumers c ON c.id = r.consumer_id
+        LEFT JOIN bills b ON b.id = r.bill_id
+        WHERE r.status = 'Pending'
+        ORDER BY r.created_at DESC, r.id DESC
+    ")->fetchAll();
+    $meterReadings = [];
+    foreach ($readingRows as $reading) {
+        $meterReadings[] = [
+            'id' => $reading['reading_code'],
+            'consumerId' => $reading['consumer_code'],
+            'consumerName' => $reading['full_name'],
+            'accountNo' => $reading['account_no'],
+            'zone' => $reading['zone'],
+            'meterSerial' => $reading['meter_serial'],
+            'classification' => $reading['classification'],
+            'previousReading' => (float)$reading['previous_reading'],
+            'currentReading' => (float)$reading['current_reading'],
+            'recordedAt' => $reading['created_at'],
+            'recordedBy' => $reading['recorded_by_name'],
+            'status' => $reading['status'] === 'Pending' ? 'Pending Office Confirmation' : $reading['status'],
+            'reviewedBy' => $reading['reviewed_by_name'],
+            'reviewedAt' => $reading['reviewed_at'],
+            'billId' => $reading['bill_no'],
+        ];
+    }
+
     sendJsonResponse([
         'success' => true,
         'source' => 'MySQL (waterline_db)',
@@ -321,12 +316,12 @@ try {
             'meters' => $meters,
             'geoPins' => $geoPins,
             'bills' => $bills,
+            'meterReadings' => $meterReadings,
             'payments' => $payments,
             'complaints' => $complaints,
             'auditLogs' => $auditLogs,
             'staff' => $staff,
             'notifications' => $notifications,
-            'tariff' => $tariff,
             'serviceBoundary' => $boundaries['serviceBoundary'],
             'clusterBoundaries' => $boundaries['clusterBoundaries'],
         ]

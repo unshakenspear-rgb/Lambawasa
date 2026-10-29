@@ -11,6 +11,7 @@ export default function HouseholdProfiling({
   onDeleteConsumer,
   onRequestConsumerLocationChange,
   onDecideConsumerLocationChange,
+  onRecordMeterReading,
   onOpenPOS,
   onOpenCalculator,
   onOpenMap,
@@ -30,11 +31,18 @@ export default function HouseholdProfiling({
   const [zoneFilter, setZoneFilter] = useState('All')
   const [statusFilter, setStatusFilter] = useState('All')
   const [selectedConsumer, setSelectedConsumer] = useState(null)
+  const [editReadingVal, setEditReadingVal] = useState('')
   const [showAddModal, setShowAddModal] = useState(false)
   const [locationDraft, setLocationDraft] = useState(null)
   const profileMapRef = useRef(null)
   const profileMapInstanceRef = useRef(null)
   const profileMarkerRef = useRef(null)
+
+  useEffect(() => {
+    if (selectedConsumer) {
+      setEditReadingVal(String(selectedConsumer.lastReading ?? ''))
+    }
+  }, [selectedConsumer])
 
   // Sync initialSearch if parent updates it (e.g. repeated global searches)
   useEffect(() => {
@@ -353,9 +361,54 @@ export default function HouseholdProfiling({
                 <span className="label">Premise Address</span>
                 <strong>{selectedConsumer.address}</strong>
               </div>
-              <div className="detail-item">
-                <span className="label">Latest Meter Reading</span>
-                <strong>{selectedConsumer.lastReading} cu.m</strong>
+              <div className="detail-item span-2" style={{ background: '#f8fafc', padding: '10px 14px', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
+                  <span className="label" style={{ margin: 0, fontWeight: 700, color: '#0369a1' }}>Latest Meter Reading (Cubic Meters)</span>
+                  {currentUser?.role === 'President' && (
+                    <span style={{ fontSize: '11px', background: '#e0f2fe', color: '#0284c7', padding: '2px 8px', borderRadius: '6px', fontWeight: 700 }}>
+                      Submit for Office Approval
+                    </span>
+                  )}
+                </div>
+                {currentUser?.role === 'President' ? (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '6px' }}>
+                    <input
+                      type="number"
+                      step="any"
+                      min="0"
+                      value={editReadingVal}
+                      onChange={(e) => setEditReadingVal(e.target.value)}
+                      style={{
+                        padding: '6px 10px',
+                        border: '1.5px solid #0284c7',
+                        borderRadius: '6px',
+                        fontSize: '14px',
+                        fontWeight: 700,
+                        width: '120px',
+                      }}
+                    />
+                    <span style={{ fontSize: '13px', fontWeight: 600, color: '#475569' }}>cu.m (m³)</span>
+                    <button
+                      type="button"
+                      className="primary-button"
+                      style={{ padding: '6px 12px', fontSize: '12px' }}
+                      onClick={() => {
+                        if (onRecordMeterReading) {
+                          onRecordMeterReading({
+                            meter: { serialNo: selectedConsumer.meterNo || 'Unassigned' },
+                            consumer: selectedConsumer,
+                            currentReading: editReadingVal.trim() === '' ? Number.NaN : Number(editReadingVal),
+                          })
+                        }
+                      }}
+                    >
+                      Submit Reading
+                    </button>
+                    <small>Submitting does not update the official reading until Office Staff approve it.</small>
+                  </div>
+                ) : (
+                  <strong>{selectedConsumer.lastReading} cu.m</strong>
+                )}
               </div>
               <div className="detail-item">
                 <span className="label">Field Map Locator</span>
